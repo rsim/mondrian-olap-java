@@ -5,7 +5,7 @@ require_relative "test_helper"
 java_import "mondrian.olap.fun.sort.Sorter"
 java_import "mondrian.rolap.RolapUtil"
 
-# Regression test for the member comparator total-order bug (EAZYBI-7219).
+# Regression test for the member comparator total-order bug.
 #
 # Sorter.compareSiblingMembers used to return 0 for two *distinct* members whose order key is
 # the NULL sentinel RolapUtil.sqlNullValue (e.g. an Issue Epic whose epic_id ordinal column is
