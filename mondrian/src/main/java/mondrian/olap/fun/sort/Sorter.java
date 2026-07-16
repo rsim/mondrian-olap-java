@@ -814,21 +814,29 @@ public class Sorter {
     final Comparable k1 = m1.getOrderKey();
     final Comparable k2 = m2.getOrderKey();
     if ( ( k1 != null ) && ( k2 != null ) ) {
-      // PATCH: Avoid comparing to RolapUtil.sqlNullValue
-      if ( k2 == RolapUtil.sqlNullValue ) {
-        return k2 == k1 ? 0 : 1;
+      // PATCH: Compare NULL order keys explicitly on both sides (a NULL order key collates before
+      // other values) and fall through to the ordinal and member comparison when order keys compare
+      // as equal (both are NULL, or equal under the case-insensitive collator).
+      // Returning 0 for distinct members would break the total order that compareHierarchically
+      // must impose and would fail hierarchize sorting with
+      // "Comparison method violates its general contract!".
+      final int c;
+      if ( k1 == RolapUtil.sqlNullValue || k2 == RolapUtil.sqlNullValue ) {
+        c = ( k1 == k2 ) ? 0 : ( k1 == RolapUtil.sqlNullValue ? -1 : 1 );
       } else {
-        return k1.compareTo( k2 );
+        c = k1.compareTo( k2 );
       }
-    } else {
-      final int ordinal1 = m1.getOrdinal();
-      final int ordinal2 = m2.getOrdinal();
-      return ( ordinal1 == ordinal2 )
-        ? m1.compareTo( m2 )
-        : ( ordinal1 < ordinal2 )
-        ? -1
-        : 1;
+      if ( c != 0 ) {
+        return c;
+      }
     }
+    final int ordinal1 = m1.getOrdinal();
+    final int ordinal2 = m2.getOrdinal();
+    return ( ordinal1 == ordinal2 )
+      ? m1.compareTo( m2 )
+      : ( ordinal1 < ordinal2 )
+      ? -1
+      : 1;
   }
 
 
