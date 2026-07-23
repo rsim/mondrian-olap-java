@@ -59,13 +59,24 @@ never be served to a different schema. See
 
 ### `ExpiringReference` — schema pool TTL
 
-A `SoftReference` subclass that additionally holds a hard reference until a
-timeout elapses, renewing the timer on each `get`. Its one consumer is
-`RolapSchemaPool`, which wraps every pooled `RolapSchema` in one. The timeout
-comes from the `PinSchemaTimeout` connect-string property (default `"-1s"`);
-any value ≤ 0 means the hard reference is kept forever, so by default schemas
-are never soft-collected — a positive value turns the pool into a
-keep-alive-while-used cache.
+A `SoftReference` subclass that can additionally hold a *hard* reference to its
+referent for a configurable window, keeping it uncollectable until the window
+elapses (the timer renews on each `get`). Its one consumer is
+`RolapSchemaPool`, which wraps every pooled `RolapSchema` in one. The window
+comes from the `PinSchemaTimeout` connect-string property (default `"-1s"`),
+parsed in `ExpiringReference#setTimer`:
+
+- **negative** (the default `-1s`): no hard reference is held — it behaves as a
+  plain `SoftReference`, so a pooled schema is eligible for collection under
+  memory pressure at any time;
+- **`0`**: permanent hard pin — the schema is never soft-collected;
+- **positive**: hard-pinned for that duration, renewed on each `get`, then
+  reverting to a plain soft reference.
+
+(Note the constructor's own javadoc — "if timeout is equal or less than 0, this
+means a hard reference" — contradicts the code: only `0` pins permanently; a
+negative value is the no-pin case, so the default schema pool is *not* a
+keep-forever cache.)
 
 ### `ClassResolver` and `ServiceDiscovery` — SPI instantiation
 

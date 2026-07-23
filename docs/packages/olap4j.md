@@ -5,7 +5,7 @@ OLAP API) on top of the native engine — the primary API surface for the
 mondrian-olap JRuby gem. Entry/exit control flow:
 [../query-lifecycle.md](../query-lifecycle.md) stages 1, 2 and 6; the native
 interfaces being wrapped: [olap.md](olap.md); the statement/execution machinery
-underneath: server.md (planned).*
+underneath: [server.md](server.md).*
 
 ## Role and the wrapping pattern
 

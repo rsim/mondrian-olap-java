@@ -196,7 +196,7 @@ phase protocol described next.
 > `RolapSchema` and persist across queries. Native set evaluation
 > (`RolapNativeSet` + `SqlTupleReader`) can fetch whole crossjoins/filtered
 > sets as one SQL statement instead of iterating in memory. Details:
-> `topics/member-resolution.md` (planned).
+> [topics/member-resolution.md](topics/member-resolution.md).
 
 ### 5.3 The phase loop: evaluate → batch → SQL → re-evaluate
 
@@ -239,8 +239,10 @@ This protocol is why evaluation-path code must never swallow exceptions
 blindly: `valueNotReadyException` and `CellRequestQuantumExceededException`
 are control flow, and must propagate to the phase loop.
 
-Deep dives: `topics/cell-batching.md`, `topics/sql-generation.md`,
-`topics/caching.md`, `topics/aggregate-tables.md` (planned).
+Deep dives: [topics/cell-batching.md](topics/cell-batching.md),
+[topics/sql-generation.md](topics/sql-generation.md),
+[topics/caching.md](topics/caching.md),
+[topics/aggregate-tables.md](topics/aggregate-tables.md).
 
 ### 5.4 NON EMPTY
 

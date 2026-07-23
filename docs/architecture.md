@@ -166,7 +166,8 @@ Recurring mechanisms you must know to read this codebase:
 - **Native SQL pushdown.** Certain set operations (NonEmpty crossjoins,
   TopCount, Filter) can be evaluated as SQL instead of in memory
   (`RolapNativeRegistry` and the `RolapNative*` classes) — a major performance
-  path with its own topic document (planned).
+  path with its own topic document,
+  [topics/native-evaluation.md](topics/native-evaluation.md).
 - **SPI extensibility.** Database differences live behind `mondrian.spi.Dialect`;
   caching, schema preprocessing, data sources, functions, and formatting all
   have SPI hooks under `mondrian.spi`.
