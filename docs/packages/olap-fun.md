@@ -4,7 +4,7 @@
 this package, together with the resolver machinery that binds call syntax to a
 `FunDef` during [query-lifecycle stage 3](../query-lifecycle.md) and the
 `compileCall` implementations that emit `Calc` trees in stage 4 (see
-packages/calc.md). The small `mondrian.udf` package, covered at the end, holds
+[calc.md](calc.md)). The small `mondrian.udf` package, covered at the end, holds
 the bundled user-defined functions. Several set functions defer to native SQL
 evaluation — see [topics/native-evaluation.md](../topics/native-evaluation.md).*
 
