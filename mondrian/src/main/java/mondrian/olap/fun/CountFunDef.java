@@ -20,7 +20,9 @@ import mondrian.olap.*;
  * @author jhyde
  * @since Mar 23, 2006
  */
-class CountFunDef extends AbstractAggregateFunDef {
+class CountFunDef extends AbstractAggregateFunDef
+    implements FormatAwareFunDef
+{
   static final String[] ReservedWords = new String[] { "INCLUDEEMPTY", "EXCLUDEEMPTY" };
 
   static final ReflectiveMultiResolver Resolver =
@@ -31,6 +33,13 @@ class CountFunDef extends AbstractAggregateFunDef {
 
   public CountFunDef( FunDef dummyFunDef ) {
     super( dummyFunDef );
+  }
+
+  // Count always returns an integer, so a calculated member using it as its
+  // formula should default to an integer format rather than inheriting the
+  // format of a measure found in the counted set.
+  public String getFixedFormatString() {
+    return "#,##0";
   }
 
   public Calc compileCall( ResolvedFunCall call, ExpCompiler compiler ) {

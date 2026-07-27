@@ -371,6 +371,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing a date to which a specified time "
         + "interval has been added.")
+    @FixedFormat("mmm dd yyyy")
     // PATCH: Accept Object date to support Numeric-typed date expressions
     // (e.g. calculated members). See castToDate.
     public static Date dateAdd(String intervalName, double number, Object date) {
@@ -546,6 +547,7 @@ public class Vba {
     @Signature("DateSerial(year, month, day)")
     @Description(
         "Returns a Variant (Date) for a specified year, month, and day.")
+    @FixedFormat("mmm dd yyyy")
     public static Date dateSerial(int year, int month, int day) {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
