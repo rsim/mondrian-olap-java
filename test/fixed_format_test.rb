@@ -5,9 +5,7 @@ require 'date'
 
 # Functions whose result type is fixed (independent of their arguments) should
 # use a fixed default format string rather than inheriting the format of the
-# first member found in the expression. Covers the engine-side functions:
-# the builtin Count and the VBA DateAdd/DateSerial. The eazyBI date UDFs are
-# covered separately in the mondrian-olap gem consumer's test suite.
+# first member found in the expression.
 describe "Fixed default formatting for fixed-output functions" do
   before(:all) do
     create_olap_connection
