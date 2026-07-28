@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require 'date'
 
 # Functions whose result type is fixed (independent of their arguments) should
 # use a fixed default format string rather than inheriting the format of the
@@ -9,6 +8,9 @@ require 'date'
 describe "Fixed default formatting for fixed-output functions" do
   before(:all) do
     create_olap_connection
+    # Pin the connection locale so the 'mmm dd yyyy' month abbreviations stay
+    # in English regardless of the machine's default locale.
+    @olap.locale = 'en'
   end
 
   describe "Count defaults to an integer format" do
