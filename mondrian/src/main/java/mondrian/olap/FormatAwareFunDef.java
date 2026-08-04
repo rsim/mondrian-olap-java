@@ -49,6 +49,13 @@ public interface FormatAwareFunDef {
     int NOT_PARTICIPATING = Integer.MIN_VALUE;
 
     /**
+     * Format string for a function returning a whole number. Same string that
+     * Mondrian's {@code "Standard"} format macro expands to, so a member using
+     * it renders as it would with no format string at all.
+     */
+    String INTEGER_FORMAT_STRING = "#,##0";
+
+    /**
      * Returns a fixed format string to apply to the result of this function
      * call, regardless of its arguments, or {@code null} to fall back to
      * {@link #getFormatExpIndex(Exp[])}.

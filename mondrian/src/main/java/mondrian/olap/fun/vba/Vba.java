@@ -35,6 +35,13 @@ public class Vba {
     private static final DateFormatSymbols DATE_FORMAT_SYMBOLS =
         new DateFormatSymbols(Locale.getDefault());
 
+    // Default format strings for functions with a fixed result type, used by
+    // the @FixedFormat annotation below. Which one applies depends on whether
+    // the function returns a date, a time, or both.
+    static final String DATE_FORMAT = "mmm dd yyyy";
+    static final String TIME_FORMAT = "hh:mm:ss";
+    static final String DATE_TIME_FORMAT = "mmm dd yyyy hh:mm:ss";
+
     // Conversion
 
     @FunctionName("CBool")
@@ -74,6 +81,7 @@ public class Vba {
     @Description(
         "Returns an expression that has been converted to a Variant of subtype "
         + "Date.")
+    @FixedFormat(DATE_FORMAT)
     public static Date cDate(Object expression) {
         String str = String.valueOf(expression);
         if (expression instanceof Date) {
@@ -371,7 +379,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing a date to which a specified time "
         + "interval has been added.")
-    @FixedFormat("mmm dd yyyy")
+    @FixedFormat(DATE_FORMAT)
     // PATCH: Accept Object date to support Numeric-typed date expressions
     // (e.g. calculated members). See castToDate.
     public static Date dateAdd(String intervalName, double number, Object date) {
@@ -531,6 +539,7 @@ public class Vba {
     @FunctionName("Date")
     @Signature("Date")
     @Description("Returns a Variant (Date) containing the current system date.")
+    @FixedFormat(DATE_FORMAT)
     public static Date date() {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -547,7 +556,7 @@ public class Vba {
     @Signature("DateSerial(year, month, day)")
     @Description(
         "Returns a Variant (Date) for a specified year, month, and day.")
-    @FixedFormat("mmm dd yyyy")
+    @FixedFormat(DATE_FORMAT)
     public static Date dateSerial(int year, int month, int day) {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -558,6 +567,7 @@ public class Vba {
     @FunctionName("DateValue")
     @Signature("DateValue(date)")
     @Description("Returns a Variant (Date).")
+    @FixedFormat(DATE_FORMAT)
     // PATCH: Accept Object date to support Numeric-typed date expressions.
     public static Date dateValue(Object date) {
         final Calendar calendar = Calendar.getInstance();
@@ -624,6 +634,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) specifying the current date and time "
         + "according your computer's system date and time.")
+    @FixedFormat(DATE_TIME_FORMAT)
     public static Date now() {
         return new Date();
     }
@@ -646,6 +657,7 @@ public class Vba {
     @FunctionName("Time")
     @Signature("Time()")
     @Description("Returns a Variant (Date) indicating the current system time.")
+    @FixedFormat(TIME_FORMAT)
     public static Date time() {
         return new Date();
     }
@@ -657,6 +669,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing the time for a specific hour, "
         + "minute, and second.")
+    @FixedFormat(TIME_FORMAT)
     public static Date timeSerial(int hour, int minute, int second) {
         final Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -669,6 +682,7 @@ public class Vba {
     @FunctionName("TimeValue")
     @Signature("TimeValue(time)")
     @Description("Returns a Variant (Date) containing the time.")
+    @FixedFormat(TIME_FORMAT)
     // PATCH: Accept Object time to support Numeric-typed date expressions.
     public static Date timeValue(Object time) {
         final Calendar calendar = Calendar.getInstance();

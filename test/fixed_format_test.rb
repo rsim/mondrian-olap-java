@@ -14,17 +14,57 @@ describe "Fixed default formatting for fixed-output functions" do
   end
 
   describe "Count defaults to an integer format" do
-    it "uses a fixed integer format instead of inheriting a member format" do
+    # MDX Count has two independent implementations - the function form
+    # Count(<Set>) and the property form <Set>.Count - which must agree.
+    {
+      "Count(Filter([Customers].[USA].Children, [Measures].[Custom] > 0))" => 'function form',
+      "Filter([Customers].[USA].Children, [Measures].[Custom] > 0).Count" => 'property form',
+      "Count(Filter([Customers].[USA].Children, [Measures].[Custom] > 0), INCLUDEEMPTY)" => 'INCLUDEEMPTY form',
+      "Count(Filter([Customers].[USA].Children, [Measures].[Custom] > 0), EXCLUDEEMPTY)" => 'EXCLUDEEMPTY form'
+    }.each do |expression, form|
+      it "does not inherit a member format from the counted set in the #{form}" do
+        result = @olap.from('Sales').
+          with_member('[Measures].[Custom]').as(
+            '[Measures].[Unit Sales]', format_string: '$#,##0.0000'
+          ).
+          with_member('[Measures].[Cnt]').as(expression).
+          columns('[Measures].[Cnt]').execute
+        # Must not leak the '$#,##0.0000' format from the Filter predicate.
+        assert_equal '3', result.formatted_values[0]
+      end
+    end
+
+    it "formats both Count syntaxes identically" do
       result = @olap.from('Sales').
         with_member('[Measures].[Custom]').as(
           '[Measures].[Unit Sales]', format_string: '$#,##0.0000'
         ).
-        with_member('[Measures].[Cnt]').as(
+        with_member('[Measures].[Function]').as(
           "Count(Filter([Customers].[USA].Children, [Measures].[Custom] > 0))"
         ).
+        with_member('[Measures].[Property]').as(
+          "Filter([Customers].[USA].Children, [Measures].[Custom] > 0).Count"
+        ).
+        columns('[Measures].[Function]', '[Measures].[Property]').execute
+      assert_equal result.formatted_values[0], result.formatted_values[1]
+    end
+
+    it "keeps an explicit format string over the fixed integer format" do
+      result = @olap.from('Sales').
+        with_member('[Measures].[Cnt]').as(
+          "Count([Customers].[USA].Children)", format_string: '000'
+        ).
         columns('[Measures].[Cnt]').execute
-      # Must not leak the '$#,##0.0000' format from the Filter predicate.
-      assert_equal '3', result.formatted_values[0]
+      assert_equal '003', result.formatted_values[0]
+    end
+
+    it "keeps an explicit format string over the fixed integer format in the property form" do
+      result = @olap.from('Sales').
+        with_member('[Measures].[Cnt]').as(
+          "[Customers].[USA].Children.Count", format_string: '000'
+        ).
+        columns('[Measures].[Cnt]').execute
+      assert_equal '003', result.formatted_values[0]
     end
   end
 
@@ -43,6 +83,38 @@ describe "Fixed default formatting for fixed-output functions" do
         with_member('[Measures].[D]').as("DateSerial(2020, 12, 15)").
         columns('[Measures].[D]').execute
       assert_equal 'Dec 15 2020', result.formatted_values[0]
+    end
+  end
+
+  describe "the other Vba functions with a fixed date or time result" do
+    # Functions taking a fixed argument, so that the expected value is known.
+    {
+      "CDate(DateSerial(2020, 12, 15))" => 'Dec 15 2020',
+      "DateValue(DateSerial(2020, 12, 15))" => 'Dec 15 2020',
+      "TimeSerial(14, 30, 5)" => '14:30:05',
+      "TimeValue(TimeSerial(14, 30, 5))" => '14:30:05'
+    }.each do |expression, expected|
+      it "formats #{expression} as '#{expected}'" do
+        result = @olap.from('Sales').
+          with_member('[Measures].[D]').as(expression).
+          columns('[Measures].[D]').execute
+        assert_equal expected, result.formatted_values[0]
+      end
+    end
+
+    # Functions returning the current date or time, so only the shape of the
+    # formatted value can be asserted.
+    {
+      "Date()" => /\A[A-Z][a-z]{2} \d{2} \d{4}\z/,
+      "Now()" => /\A[A-Z][a-z]{2} \d{2} \d{4} \d{2}:\d{2}:\d{2}\z/,
+      "Time()" => /\A\d{2}:\d{2}:\d{2}\z/
+    }.each do |expression, expected|
+      it "formats #{expression} as #{expected.source}" do
+        result = @olap.from('Sales').
+          with_member('[Measures].[D]').as(expression).
+          columns('[Measures].[D]').execute
+        assert_match expected, result.formatted_values[0]
+      end
     end
   end
 
