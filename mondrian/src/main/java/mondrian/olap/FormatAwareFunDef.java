@@ -56,6 +56,30 @@ public interface FormatAwareFunDef {
     String INTEGER_FORMAT_STRING = "#,##0";
 
     /**
+     * Format string for a function returning a fractional number.
+     */
+    String DECIMAL_FORMAT_STRING = "#,##0.00";
+
+    /**
+     * Format string for a function returning a date with no meaningful time
+     * of day. This is a {@link mondrian.util.Format} (VBA-style) pattern, not
+     * a {@code SimpleDateFormat} one — {@code mm} means month here, and
+     * minutes only directly after an hour token.
+     */
+    String DATE_FORMAT_STRING = "mmm dd yyyy";
+
+    /**
+     * Format string for a function returning a time of day.
+     */
+    String TIME_FORMAT_STRING = "hh:mm:ss";
+
+    /**
+     * Format string for a function returning a date with a meaningful time
+     * of day.
+     */
+    String DATE_TIME_FORMAT_STRING = DATE_FORMAT_STRING + " " + TIME_FORMAT_STRING;
+
+    /**
      * Returns a fixed format string to apply to the result of this function
      * call, regardless of its arguments, or {@code null} to fall back to
      * {@link #getFormatExpIndex(Exp[])}.
