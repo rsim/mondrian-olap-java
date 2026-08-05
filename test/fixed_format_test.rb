@@ -142,4 +142,25 @@ describe "Fixed default formatting for fixed-output functions" do
       assert_match(/\A\$/, result.formatted_values[0])
     end
   end
+
+  # A fixed format becomes the member's format expression, so members without
+  # an explicit format that reference the member inherit it through the same
+  # walk that has always propagated user-set formats outward.
+  describe "the fixed format propagates to referencing members" do
+    it "renders a ratio of a Count member with the propagated integer format" do
+      result = @olap.from('Sales').
+        with_member('[Measures].[Cnt]').as(
+          "Count([Customers].[USA].Children)"
+        ).
+        with_member('[Measures].[Share]').as(
+          "[Measures].[Cnt] / 4"
+        ).
+        columns('[Measures].[Share]').execute
+      # [Cnt] is 3; the walk from [Share] finds its fixed '#,##0', so the
+      # ratio displays rounded to '1'. Display-only - the value keeps its
+      # precision for anything that computes with it.
+      assert_equal 0.75, result.values[0]
+      assert_equal '1', result.formatted_values[0]
+    end
+  end
 end
