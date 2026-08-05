@@ -162,5 +162,21 @@ describe "Fixed default formatting for fixed-output functions" do
       assert_equal 0.75, result.values[0]
       assert_equal '1', result.formatted_values[0]
     end
+
+    # A date pattern has no numeric rendering - Format.DateFormat extends
+    # FallbackFormat, which appends the pattern token verbatim for a numeric
+    # value. So a member that inherits a date format but evaluates to a number
+    # displays the pattern text itself. Propagation of an explicitly set format
+    # has always behaved this way; a fixed format widens how often a member
+    # carries a date pattern without anyone choosing it, so pin the outcome.
+    it "displays the date pattern itself when a referencing member returns a number" do
+      result = @olap.from('Sales').
+        with_member('[Measures].[D]').as("DateSerial(2020, 12, 15)").
+        with_member('[Measures].[R]').as("IIf(1 = 0, [Measures].[D], 42)").
+        columns('[Measures].[R]').execute
+      # The walk from [R] reaches [D] first and inherits 'mmm dd yyyy', so the
+      # numeric branch renders as the pattern instead of '42'.
+      assert_equal 'mmm dd yyyy', result.formatted_values[0]
+    end
   end
 end
