@@ -139,7 +139,7 @@ describe "Fixed default formatting for fixed-output functions" do
         columns('[Measures].[R]').execute
       # Top-level expression is '+', not Count; format inference walks to
       # [Custom], so Count's fixed integer format must not take over.
-      assert_match(/\A\$/, result.formatted_values[0])
+      assert_equal '$266,776.0000', result.formatted_values[0]
     end
   end
 
