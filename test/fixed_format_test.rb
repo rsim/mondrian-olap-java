@@ -94,10 +94,41 @@ describe "Fixed default formatting for fixed-output functions" do
     end
   end
 
+  # CDate converts its argument to a date, keeping any time of day it carries,
+  # so unlike DateValue it formats with a time component. Its string inputs are
+  # parsed by java.text.DateFormat with the JVM default locale, so pin that
+  # locale to keep the accepted input formats deterministic.
+  describe "CDate defaults to a date and time format" do
+    before(:all) do
+      @default_format_locale = java.util.Locale.getDefault(java.util.Locale::Category::FORMAT)
+      java.util.Locale.setDefault(java.util.Locale::Category::FORMAT, java.util.Locale::US)
+    end
+
+    after(:all) do
+      java.util.Locale.setDefault(java.util.Locale::Category::FORMAT, @default_format_locale)
+    end
+
+    {
+      # A date argument passes through unchanged, with or without a time.
+      "CDate(DateSerial(2020, 12, 15))" => 'Dec 15 2020 00:00:00',
+      "CDate(DateAdd('h', 5, DateSerial(2020, 12, 15)))" => 'Dec 15 2020 05:00:00',
+      # The string inputs of the CDate documentation: a date, a time, and both.
+      "CDate('February 12, 1969')" => 'Feb 12 1969 00:00:00',
+      "CDate('4:35:47 PM')" => 'Jan 01 1970 16:35:47',
+      "CDate('Feb 12, 1969, 4:35:47 PM')" => 'Feb 12 1969 16:35:47'
+    }.each do |expression, expected|
+      it "formats #{expression} as '#{expected}'" do
+        result = @olap.from('Sales').
+          with_member('[Measures].[D]').as(expression).
+          columns('[Measures].[D]').execute
+        assert_equal expected, result.formatted_values[0]
+      end
+    end
+  end
+
   describe "the other Vba functions with a fixed date or time result" do
     # Functions taking a fixed argument, so that the expected value is known.
     {
-      "CDate(DateSerial(2020, 12, 15))" => 'Dec 15 2020',
       "DateValue(DateSerial(2020, 12, 15))" => 'Dec 15 2020',
       "TimeSerial(14, 30, 5)" => '14:30:05',
       "TimeValue(TimeSerial(14, 30, 5))" => '14:30:05'

@@ -75,7 +75,10 @@ public class Vba {
     @Description(
         "Returns an expression that has been converted to a Variant of subtype "
         + "Date.")
-    @FixedFormat(DATE_FORMAT_STRING)
+    // A cast keeps whatever time of day its argument has, and a time-only
+    // string parses to a time on the epoch date, so the fixed format keeps
+    // the time component.
+    @FixedFormat(DATE_TIME_FORMAT_STRING)
     public static Date cDate(Object expression) {
         String str = String.valueOf(expression);
         if (expression instanceof Date) {
