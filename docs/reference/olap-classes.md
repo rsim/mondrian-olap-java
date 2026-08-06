@@ -64,8 +64,12 @@ element classes that `RolapSchema` loading walks), and the CUP-generated
 - **Lifecycle/scope**: created by the parser, realized during `Query#resolve`.
 - **Notes/gotchas**: `Formula#getFormatExp` infers the member's FORMAT_STRING
   from its expression when none is given (stored as `Property.FORMAT_EXP_PARSED`);
-  the search honors `FormatAwareFunDef` (fork PATCH) so functions like
-  `Min`/`Max` can steer which argument's format wins.
+  the search honors `FormatAwareFunDef` (fork PATCH), so a function with a fixed
+  result type (`Count`, the date functions) can dictate a literal format, and one
+  whose result type follows its arguments (`Min`/`Max`) can steer which argument's
+  format wins. Only the outermost call of the member's expression is consulted — a
+  fixed format inside a nested call does not override the format its caller would
+  otherwise infer.
 
 ### Exp / ExpBase
 
@@ -380,7 +384,7 @@ counterpart is `mondrian.olap.type`.
 | `DriverManager` | class | `DriverManager#getConnection(connectString, catalogLocator)` builds a `mondrian.rolap.RolapConnection` from a `mondrian:` connect string. |
 | `Explain` | class | EXPLAIN PLAN FOR statement node wrapping the explained statement. |
 | `ExpCacheDescriptor` | class | Key for the expression-result cache (`Evaluator#getCachedResult`); used by the `Cache()` function and `RankFunDef`. |
-| `FormatAwareFunDef` | interface | (fork PATCH) Lets a `FunDef`/UDF steer which argument's format string a calculated member inherits (consumed by `Formula#getFormatExp`). |
+| `FormatAwareFunDef` | interface | (fork PATCH) Lets a `FunDef`/UDF steer the format string a calculated member infers, as a fixed literal (`#getFixedFormatString`) or by naming the argument to inherit from (`#getFormatExpIndex`); consumed by `Formula#getFormatExp`. Declares the shared `INTEGER_`/`DECIMAL_`/`DATE_`/`TIME_`/`DATE_TIME_FORMAT_STRING` constants. |
 | `FunCall` | interface | Function-application expression contract; concrete kinds are `mondrian.mdx.UnresolvedFunCall` / `ResolvedFunCall`. |
 | `IdentifierVisitor` | class | `MdxVisitorImpl` that collects the `Id` nodes of an expression tree (identifier gathering for batch resolution). |
 | `InvalidArgumentException` | class | `MondrianException`: an argument is invalid. |
@@ -578,14 +582,17 @@ resolver world. Its inner `UdfFunDef` maps declared `Type`s to categories and
 pre-compiles each argument (scalar, plus list/iterable for set args) into
 `Argument` wrappers, instantiating a fresh UDF object per call site because
 UDFs may keep state. (fork PATCH) Returns a UDF-produced `TupleList` as-is
-(MONDRIAN-2661) and forwards `FormatAwareFunDef` from the wrapped UDF.
+(MONDRIAN-2661) and forwards both `FormatAwareFunDef` methods from the wrapped
+UDF.
 
 **JavaFunDef** — an MDX function implemented by a public static Java method;
 `JavaFunDef#scan` manufactures one per method of `Vba`/`Excel`, with
 `JavaFunDef.FunctionName`/`.Signature`/`.Description` annotations overriding
 defaults, and `#compileCall` compiling each argument to the `Calc` matching
 the Java parameter type. (fork PATCH) Treats the MDX null sentinel as Java
-null and coerces `BigDecimal`→`double` for `double` parameters.
+null, coerces `BigDecimal`→`double` for `double` parameters, and implements
+`FormatAwareFunDef` by reading a `JavaFunDef.FixedFormat` annotation off the
+method, which is how the `Vba` date and time functions carry a fixed format.
 
 **AbstractAggregateFunDef** — base of the aggregate functions: evaluates the
 set argument with non-empty mode off (`FunUtil#evaluateSet` semantics) and
@@ -624,7 +631,8 @@ also home of the internal calcs that wrap single members/tuples as sets.
 members are statically typed Numeric, so date support relies on runtime type
 detection in `#extremeValue`; the two-arg DateTime variant compiles an
 `AbstractDateTimeCalc`), and implements `FormatAwareFunDef` so the value
-argument's format string is inherited.
+argument's format string is inherited — the argument-derived strategy, as the
+result type follows the value expression rather than being fixed.
 
 ### Tier 3: `mondrian.olap.fun` function classes and support
 
@@ -706,7 +714,7 @@ argument's format string is inherited.
 |---|---|
 | `SumFunDef` | `Sum(<Set>[, <Numeric Expression>])`. |
 | `AvgFunDef` | `Avg`. |
-| `CountFunDef` | `Count`, with EXCLUDEEMPTY/INCLUDEEMPTY. |
+| `CountFunDef` | `Count`, with EXCLUDEEMPTY/INCLUDEEMPTY; also the `<Set>.Count` property form. (fork PATCH) Implements `FormatAwareFunDef` with a fixed integer format, so both forms agree. |
 | `MedianFunDef` | `Median`. |
 | `PercentileFunDef` | `Percentile`. |
 | `StdevFunDef` | `Stdev` (alias `Stddev`) — sample standard deviation. |
