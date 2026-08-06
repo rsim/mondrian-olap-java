@@ -21,8 +21,8 @@ package mondrian.olap;
  *
  * <ul>
  * <li><b>Fixed format</b> — for functions whose result type is fixed and
- *     independent of their arguments (e.g. DateAdd always returns a date,
- *     Count always returns an integer). Implement
+ *     independent of their arguments (e.g. DateValue always returns a date
+ *     without a time, Count always returns an integer). Implement
  *     {@link #getFixedFormatString()} to return a literal format string.</li>
  * <li><b>Argument-derived format</b> — for functions whose result type
  *     depends on the data (e.g. Min/Max return a date or a number depending

@@ -373,7 +373,10 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing a date to which a specified time "
         + "interval has been added.")
-    @FixedFormat(DATE_FORMAT_STRING)
+    // The interval can be an hour, a minute or a second, and the time of day
+    // of the date argument is carried into the result, so the fixed format
+    // keeps the time component.
+    @FixedFormat(DATE_TIME_FORMAT_STRING)
     // PATCH: Accept Object date to support Numeric-typed date expressions
     // (e.g. calculated members). See castToDate.
     public static Date dateAdd(String intervalName, double number, Object date) {

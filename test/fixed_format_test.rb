@@ -68,12 +68,20 @@ describe "Fixed default formatting for fixed-output functions" do
     end
   end
 
-  describe "DateAdd defaults to a date format" do
-    it "formats the result as 'mmm dd yyyy'" do
-      result = @olap.from('Sales').
-        with_member('[Measures].[D]').as("DateAdd('d', 7, DateSerial(2020, 12, 15))").
-        columns('[Measures].[D]').execute
-      assert_equal 'Dec 22 2020', result.formatted_values[0]
+  # DateAdd can add an hour, minute or second interval, and it keeps the time
+  # of day of its date argument, so a date-only format would hide the part
+  # that the call just changed.
+  describe "DateAdd defaults to a date and time format" do
+    {
+      "DateAdd('d', 7, DateSerial(2020, 12, 15))" => 'Dec 22 2020 00:00:00',
+      "DateAdd('h', 5, DateSerial(2020, 12, 15))" => 'Dec 15 2020 05:00:00'
+    }.each do |expression, expected|
+      it "formats #{expression} as '#{expected}'" do
+        result = @olap.from('Sales').
+          with_member('[Measures].[D]').as(expression).
+          columns('[Measures].[D]').execute
+        assert_equal expected, result.formatted_values[0]
+      end
     end
   end
 
