@@ -12,7 +12,21 @@ describe "Aggregate and Statistical Functions" do
   describe "Aggregate" do
     # Java: FunctionTest#testAggregateDepends
     it "depends on correct hierarchies" do
-      skip "assertExprDependsOn not yet available"
+      assert_expression_depends_on @olap,
+        "([Measures].[Unit Sales], [Gender].[F])",
+        all_hierarchies_except("[Measures]", "[Gender]")
+      assert_expression_depends_on @olap,
+        "Aggregate([Customers].Members, ([Measures].[Unit Sales], [Gender].[F]))",
+        all_hierarchies_except("[Customers]", "[Gender]")
+      assert_expression_depends_on @olap,
+        "Aggregate([Customers].Members)",
+        all_hierarchies_except("[Customers]")
+      # Depends on the current member of the Product dimension, even though
+      # [Product].[All Products] is referenced from the expression.
+      assert_expression_depends_on @olap,
+        "Aggregate(Filter([Customers].[City].Members, " \
+          "(([Measures].[Unit Sales] / ([Measures].[Unit Sales], [Product].[All Products])) > 0.1)))",
+        all_hierarchies_except("[Customers]")
     end
 
     # Java: FunctionTest#testAggregate
@@ -234,10 +248,10 @@ describe "Aggregate and Statistical Functions" do
         {[Product].[Drink]}
         {[Product].[Food]}
         {[Product].[Non-Consumable]}
-        Row #0: .00
-        Row #0: .00
-        Row #0: .00
-        Row #0: .00
+        Row #0: 0
+        Row #0: 0
+        Row #0: 0
+        Row #0: 0
       RESULT
     end
   end
@@ -263,7 +277,14 @@ describe "Aggregate and Statistical Functions" do
   describe "Count" do
     # Java: FunctionTest#testCount
     it "counts members including empty" do
-      # The depends-on assertions use assertExprDependsOn which is not available
+      assert_expression_depends_on @olap,
+        "count(Crossjoin([Store].[All Stores].[USA].Children, {[Gender].children}), INCLUDEEMPTY)",
+        "{[Gender]}"
+
+      assert_expression_depends_on @olap,
+        "count(Crossjoin([Store].[All Stores].[USA].Children, {[Gender].children}), EXCLUDEEMPTY)",
+        all_hierarchies_except("[Store]")
+
       assert_expression_returns @olap,
         "count({[Promotion Media].[Media Type].members})", "14"
 
@@ -657,7 +678,9 @@ describe "Aggregate and Statistical Functions" do
       assert_expression_returns @olap,
         "[Measures].[Store Sales].VALUE", "565,238.13"
 
-      # The depends-on assertion for VALUE uses assertExprDependsOn which is not available
+      assert_expression_depends_on @olap,
+        "[Measures].[Store Sales].VALUE",
+        all_hierarchies_except("[Measures]")
 
       # We do not allow FORMATTED_VALUE.
       assert_query_raises @olap,

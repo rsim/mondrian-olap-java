@@ -56,4 +56,67 @@ module QueryHelper
     error = assert_raises(Mondrian::OLAP::Error) { olap.execute(mdx) }
     assert_match pattern, error.message
   end
+
+  # The list of hierarchies in the FoodMart Sales cube, in cube definition
+  # order. Mirrors TestContext.AllHiers in the Java test suite; the weekly
+  # hierarchy name depends on the SsasCompatibleNaming property.
+  def all_hierarchies
+    weekly =
+      Java::MondrianOlap::MondrianProperties.instance.SsasCompatibleNaming.get ? "[Time].[Weekly]" : "[Time.Weekly]"
+    [
+      "[Measures]", "[Store]", "[Store Size in SQFT]", "[Store Type]", "[Time]", weekly,
+      "[Product]", "[Promotion Media]", "[Promotions]", "[Customers]",
+      "[Education Level]", "[Gender]", "[Marital Status]", "[Yearly Income]"
+    ]
+  end
+
+  # Builds the "{...}" string of all Sales-cube hierarchies except those given.
+  # Useful as the expected argument to assert_expression_depends_on. Mirrors
+  # TestContext.allHiersExcept.
+  def all_hierarchies_except(*hierarchies)
+    hierarchies.each do |hierarchy|
+      raise ArgumentError, "unknown hierarchy #{hierarchy}" unless all_hierarchies.include?(hierarchy)
+    end
+    "{#{all_hierarchies.reject { |hierarchy| hierarchies.include?(hierarchy) }.join(', ')}}"
+  end
+
+  # Assert that a scalar MDX expression depends upon a given set of hierarchies.
+  # Mirrors TestContext#assertExprDependsOn: the expression is compiled inside a
+  # calculated member and each cube hierarchy is checked via Calc#dependsOn.
+  def assert_expression_depends_on(olap, expression, hierarchy_list)
+    query_string =
+      "WITH MEMBER [Measures].[Foo] AS #{Java::MondrianOlap::Util.singleQuoteString(expression)} SELECT FROM [Sales]"
+    query = olap.raw_mondrian_connection.parseQuery(query_string)
+    query.resolve
+    parsed_expression = query.getFormulas[0].getExpression
+    check_depends_on(query, parsed_expression, hierarchy_list, true)
+  end
+
+  # Assert that a set-valued MDX expression depends upon a given set of hierarchies.
+  # Mirrors TestContext#assertSetExprDependsOn.
+  def assert_set_expression_depends_on(olap, expression, hierarchy_list)
+    query_string = "SELECT {#{expression}} ON COLUMNS FROM [Sales]"
+    query = olap.raw_mondrian_connection.parseQuery(query_string)
+    query.resolve
+    parsed_expression = query.getAxes[0].getSet
+    check_depends_on(query, parsed_expression, hierarchy_list, false)
+  end
+
+  # Assert that a member-valued MDX expression depends upon a given set of hierarchies.
+  # Mirrors TestContext#assertMemberExprDependsOn.
+  def assert_member_expression_depends_on(olap, expression, hierarchy_list)
+    assert_set_expression_depends_on(olap, "{#{expression}}", hierarchy_list)
+  end
+
+  private
+
+  # Compiles the expression, then builds the "{...}" list of cube hierarchies it
+  # depends on (in cube order) and asserts it equals the expected list.
+  # Mirrors TestContext#checkDependsOn.
+  def check_depends_on(query, expression, expected, scalar)
+    result_style = scalar ? nil : Java::MondrianCalc::ResultStyle::ITERABLE
+    calc = query.compileExpression(expression, scalar, result_style)
+    depends = query.getCube.getHierarchies.to_a.select { |hierarchy| calc.dependsOn(hierarchy) }.map(&:getUniqueName)
+    assert_equal expected, "{#{depends.join(', ')}}"
+  end
 end

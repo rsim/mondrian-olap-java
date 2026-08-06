@@ -16,9 +16,22 @@ package mondrian.olap;
  *
  * <p>When a calculated member has no explicit FORMAT_STRING and its
  * defining expression is a call to a function implementing this interface,
- * {@link Formula} will call {@link #getFormatExpIndex(Exp[])} to determine
- * which argument's format to use, instead of doing a depth-first walk
- * that picks the first measure it encounters.
+ * {@link Formula} consults the function instead of doing a depth-first walk
+ * that picks the first measure it encounters. Two strategies are offered:
+ *
+ * <ul>
+ * <li><b>Fixed format</b> — for functions whose result type is fixed and
+ *     independent of their arguments (e.g. DateValue always returns a date
+ *     without a time, Count always returns an integer). Implement
+ *     {@link #getFixedFormatString()} to return a literal format string.</li>
+ * <li><b>Argument-derived format</b> — for functions whose result type
+ *     depends on the data (e.g. Min/Max return a date or a number depending
+ *     on the value expression). Implement {@link #getFormatExpIndex(Exp[])}
+ *     to name the argument whose format should be inherited.</li>
+ * </ul>
+ *
+ * <p>A non-null {@link #getFixedFormatString()} takes precedence over
+ * {@link #getFormatExpIndex(Exp[])}; a function normally implements only one.
  *
  * <p>Can be implemented by {@link FunDef} implementations directly
  * (e.g., Min/Max), or by {@link mondrian.spi.UserDefinedFunction}
@@ -34,6 +47,53 @@ public interface FormatAwareFunDef {
      * the default format-finding behavior.
      */
     int NOT_PARTICIPATING = Integer.MIN_VALUE;
+
+    /**
+     * Format string for a function returning a whole number. Same string that
+     * Mondrian's {@code "Standard"} format macro expands to, so a member using
+     * it renders as it would with no format string at all.
+     */
+    String INTEGER_FORMAT_STRING = "#,##0";
+
+    /**
+     * Format string for a function returning a fractional number.
+     */
+    String DECIMAL_FORMAT_STRING = "#,##0.00";
+
+    /**
+     * Format string for a function returning a date with no meaningful time
+     * of day. This is a {@link mondrian.util.Format} (VBA-style) pattern, not
+     * a {@code SimpleDateFormat} one — {@code mm} means month here, and
+     * minutes only directly after an hour token.
+     */
+    String DATE_FORMAT_STRING = "mmm dd yyyy";
+
+    /**
+     * Format string for a function returning a time of day.
+     */
+    String TIME_FORMAT_STRING = "hh:mm:ss";
+
+    /**
+     * Format string for a function returning a date with a meaningful time
+     * of day.
+     */
+    String DATE_TIME_FORMAT_STRING = DATE_FORMAT_STRING + " " + TIME_FORMAT_STRING;
+
+    /**
+     * Returns a fixed format string to apply to the result of this function
+     * call, regardless of its arguments, or {@code null} to fall back to
+     * {@link #getFormatExpIndex(Exp[])}.
+     *
+     * <p>Use this for functions with a fixed result type — e.g. a date
+     * function returning {@code "mmm dd yyyy"} or a counting function
+     * returning {@code "#,##0"}. A non-null value takes precedence over
+     * {@link #getFormatExpIndex(Exp[])}.
+     *
+     * @return a literal format string, or {@code null} if not applicable
+     */
+    default String getFixedFormatString() {
+        return null;
+    }
 
     /**
      * Returns the index of the argument whose format string should be
@@ -58,5 +118,7 @@ public interface FormatAwareFunDef {
      * @param args the arguments to the function call
      * @return argument index, -1 to skip, or NOT_PARTICIPATING
      */
-    int getFormatExpIndex(Exp[] args);
+    default int getFormatExpIndex(Exp[] args) {
+        return NOT_PARTICIPATING;
+    }
 }

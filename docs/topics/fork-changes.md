@@ -153,11 +153,24 @@ deltas.
   `compileDateTime` callers (e.g. VBA `DateDiff` via `JavaFunDef`) can cast
   safely.
 - **`FormatAwareFunDef`** (new interface, `mondrian.olap`) — lets a function
-  control which argument's format string is inferred for a calculated member
-  that has no explicit FORMAT_STRING. `Formula` consults it instead of the
-  default depth-first walk (which could pick a numeric measure inside a
-  Filter condition); `MinMaxFunDef` implements it (use the value expression
-  of the 2-arg form), and `UdfResolver`'s `UdfFunDef` adapter forwards it
+  control the format string inferred for a calculated member that has no
+  explicit FORMAT_STRING. `Formula` consults it instead of the default
+  depth-first walk (which could pick a numeric measure inside a Filter
+  condition), and offers two strategies:
+  - **fixed format** (`#getFixedFormatString`) for a function whose result
+    type does not depend on its arguments — `Count` returns an integer, the
+    date functions return a date — returning one of the interface's shared
+    `INTEGER_`/`DECIMAL_`/`DATE_`/`TIME_`/`DATE_TIME_FORMAT_STRING` constants,
+    which keeps one owner for each literal pattern;
+  - **argument-derived** (`#getFormatExpIndex`) for a function whose result
+    type follows the data, such as `MinMaxFunDef` naming the value expression
+    of its 2-arg form.
+
+  A non-null fixed format wins, and only the outermost call of the member's
+  expression is consulted — a fixed format inside a nested call does not
+  override the format its caller would otherwise infer. `JavaFunDef` reads a `@FixedFormat` annotation
+  on the implementing method to supply the fixed string for the `Vba` date and
+  time functions, and `UdfResolver`'s `UdfFunDef` adapter forwards both methods
   when the wrapped UDF implements the interface.
 - **`skipJavaFunDefs`** — `BuiltinFunTable#defineFunctions` reads the
   `mondrian.olap.fun.skipJavaFunDefs` system property (comma-separated

@@ -505,6 +505,12 @@ public class Formula extends QueryPart {
             ResolvedFunCall call = (ResolvedFunCall) exp;
             FormatAwareFunDef formatAware = call.getFormatAwareFunDef();
             if (formatAware != null) {
+                // A function with a fixed result type (e.g. DateAdd, Count)
+                // dictates its own format regardless of arguments.
+                String fixedFormat = formatAware.getFixedFormatString();
+                if (fixedFormat != null) {
+                    return Literal.createString(fixedFormat);
+                }
                 int index = formatAware.getFormatExpIndex(call.getArgs());
                 if (index == -1) {
                     // Function explicitly opts out of format inheritance.

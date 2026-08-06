@@ -3159,10 +3159,10 @@ public class FunctionTest extends FoodMartTestCase {
         + "{[Product].[Drink]}\n"
         + "{[Product].[Food]}\n"
         + "{[Product].[Non-Consumable]}\n"
-        + "Row #0: .00\n"
-        + "Row #0: .00\n"
-        + "Row #0: .00\n"
-        + "Row #0: .00\n" );
+        + "Row #0: 0\n"
+        + "Row #0: 0\n"
+        + "Row #0: 0\n"
+        + "Row #0: 0\n" );
   }
 
   public void testAvg() {
