@@ -85,6 +85,10 @@ public class Vba {
             // times
             // "October 19, 1962"
             // "4:35:47 PM"
+            Date fixed = parseWithFixedPatterns(str);
+            if (fixed != null) {
+                return fixed;
+            }
             try {
                 return DateFormat.getTimeInstance().parse(str);
             } catch (ParseException ex0) {
@@ -103,6 +107,42 @@ public class Vba {
                 }
             }
         }
+    }
+
+    // PATCH: The formats below are accepted on every Java version and with
+    // every default locale. The DateFormat instances used after them come from
+    // the JVM default locale, whose patterns change between Java versions: Java
+    // 8 puts no comma before the time, and Java 21 puts a narrow no-break space
+    // before AM/PM. A saved MDX expression therefore gave a different result,
+    // or an error, after a Java upgrade. The locale formats stay as a fallback,
+    // so an expression that works today keeps working.
+    private static final String[] CDATE_PATTERNS = {
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd",
+        "MMM d yyyy HH:mm:ss",
+        "MMM d, yyyy HH:mm:ss",
+        "MMM d yyyy h:mm:ss a",
+        "MMM d, yyyy h:mm:ss a",
+        "MMM d yyyy",
+        "MMM d, yyyy",
+        "HH:mm:ss",
+        "h:mm:ss a",
+    };
+
+    // Returns null when no fixed pattern matches the whole string.
+    private static Date parseWithFixedPatterns(String str) {
+        // Java 21 formats AM and PM after a narrow no-break space (CLDR 42).
+        String text = str.replace('\u202f', ' ').trim();
+        for (String pattern : CDATE_PATTERNS) {
+            SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
+            format.setLenient(false);
+            ParsePosition position = new ParsePosition(0);
+            Date parsed = format.parse(text, position);
+            if (parsed != null && position.getIndex() == text.length()) {
+                return parsed;
+            }
+        }
+        return null;
     }
 
     // PATCH: Coerce an Object argument to Date. VBA date functions
