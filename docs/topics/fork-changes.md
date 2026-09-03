@@ -172,6 +172,14 @@ deltas.
   are always statically typed Numeric. Also: MONDRIAN-2730 fix in `Vba#int_`
   (upstream `v < 0 && v > dv` wrongly returned 0 for −1 < x < 0; now
   `v <= 0`), and deprecated `new Double(s)` replaced with `Double.valueOf`.
+  `Vba#cDate` tries the fixed `Locale.US` pattern list `CDATE_PATTERNS`
+  before the JVM-locale `DateFormat` instances, because the patterns of a
+  locale are not the same in every Java version (Java 9 added a comma
+  between the date and the time, and CLDR 42 in Java 20 put a narrow
+  no-break space before AM and PM), so the same saved MDX expression gave a
+  different result, or an error, after a Java upgrade. The locale formats
+  stay as a fallback, and they keep the raw string: a Java 20 or later
+  pattern holds the narrow no-break space itself.
 - **`JavaFunDef`** — argument evaluation treats the MDX null sentinel
   (`nullValue`) like Java null (upstream only checked Java null), and
   coerces `BigDecimal` arguments to `double` when the target method's
