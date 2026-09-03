@@ -81,14 +81,16 @@ public class Vba {
         } else if (expression == null) {
             return null;
         } else {
+            // PATCH: Try the fixed patterns before the locale formats. See
+            // CDATE_PATTERNS.
+            Date parsedDate = parseWithFixedPatterns(str);
+            if (parsedDate != null) {
+                return parsedDate;
+            }
             // note that this currently only supports a limited set of dates and
             // times
             // "October 19, 1962"
             // "4:35:47 PM"
-            Date fixed = parseWithFixedPatterns(str);
-            if (fixed != null) {
-                return fixed;
-            }
             try {
                 return DateFormat.getTimeInstance().parse(str);
             } catch (ParseException ex0) {
@@ -139,15 +141,22 @@ public class Vba {
     };
 
     // Returns null when no fixed pattern matches the whole string.
+    //
+    // Only the fixed patterns get the normalised string. The caller keeps the
+    // raw string for the locale formats, because the pattern of a Java 20 or
+    // later locale holds the narrow no-break space itself. A normalised string
+    // stops matching that pattern, and the date-only format then reads the
+    // date and drops the time.
     private static Date parseWithFixedPatterns(String str) {
-        // Java 21 formats AM and PM after a narrow no-break space (CLDR 42).
-        String text = str.replace('\u202f', ' ').trim();
+        // Java 20 and later format AM and PM after a narrow no-break space
+        // (CLDR 42). See https://bugs.openjdk.org/browse/JDK-8304925
+        String normalized = str.replace('\u202f', ' ').trim();
         for (String pattern : CDATE_PATTERNS) {
             SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
             format.setLenient(false);
             ParsePosition position = new ParsePosition(0);
-            Date parsed = format.parse(text, position);
-            if (parsed != null && position.getIndex() == text.length()) {
+            Date parsed = format.parse(normalized, position);
+            if (parsed != null && position.getIndex() == normalized.length()) {
                 return parsed;
             }
         }
