@@ -150,9 +150,14 @@ public class Vba {
         // Java 20 and later format AM and PM after a narrow no-break space
         // (CLDR 42). See https://bugs.openjdk.org/browse/JDK-8304925
         String normalized = str.replace('\u202f', ' ').trim();
+        // One formatter for the whole loop. It must stay method-local, because
+        // SimpleDateFormat is not thread-safe and Mondrian evaluates cells
+        // concurrently. The strict mode survives applyPattern.
+        SimpleDateFormat format =
+            new SimpleDateFormat(CDATE_PATTERNS[0], Locale.US);
+        format.setLenient(false);
         for (String pattern : CDATE_PATTERNS) {
-            SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
-            format.setLenient(false);
+            format.applyPattern(pattern);
             ParsePosition position = new ParsePosition(0);
             Date parsed = format.parse(normalized, position);
             if (parsed != null && position.getIndex() == normalized.length()) {
