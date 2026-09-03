@@ -3,15 +3,15 @@
 require_relative "test_helper"
 
 # CDate parses a string with java.text.DateFormat of the JVM default locale.
-# The patterns of a locale are not the same in every Java version, so the same
-# saved MDX expression gave a different result, or an error, after a Java
-# upgrade. CDate now tries a fixed set of patterns first. These tests must give
-# the same result on every Java version and with every default locale.
+# The patterns of a locale are not the same in every Java version. The same
+# saved MDX expression therefore gave a different result, or an error, after a
+# Java upgrade. CDate now tries a fixed set of patterns first. These tests must
+# give the same result on every Java version and with every default locale.
 describe "CDate parses strings the same way on every Java version" do
   before(:all) do
+    @default_format_locale = java.util.Locale.getDefault(java.util.Locale::Category::FORMAT)
     create_olap_connection
     @olap.locale = 'en'
-    @default_format_locale = java.util.Locale.getDefault(java.util.Locale::Category::FORMAT)
   end
 
   after(:all) do
@@ -53,7 +53,38 @@ describe "CDate parses strings the same way on every Java version" do
     end
   end
 
+  # Java 20 and later format AM and PM after a narrow no-break space (CLDR 42),
+  # so a string saved on such a JVM carries that character.
+  it "parses a time that holds a narrow no-break space before PM" do
+    assert_equal 'Jan 01 1970 16:35:47', formatted("CDate('4:35:47\u202FPM')")
+  end
+
+  # The locale formats stay as a fallback for a shape that no fixed pattern
+  # accepts. Build the input with the same locale DateFormat that reads it back.
+  # The fallback gets the raw string, so it still matches a Java 20 or later
+  # pattern, which holds the narrow no-break space itself. This test turns red
+  # if anybody normalises the string before the fallback.
+  it "keeps the time of a locale date and time that no fixed pattern accepts" do
+    canada = java.util.Locale::CANADA
+    calendar = java.util.Calendar.getInstance
+    calendar.clear
+    calendar.set(1969, 1, 12, 16, 35, 47)
+    input = java.text.DateFormat.getDateTimeInstance(
+      java.text.DateFormat::DEFAULT, java.text.DateFormat::DEFAULT, canada
+    ).format(calendar.getTime)
+    java.util.Locale.setDefault(java.util.Locale::Category::FORMAT, canada)
+    assert_equal 'Feb 12 1969 16:35:47', formatted("CDate('#{input}')")
+  ensure
+    java.util.Locale.setDefault(java.util.Locale::Category::FORMAT, @default_format_locale)
+  end
+
   it "reports an error for a string that no pattern accepts" do
     assert_match(/must be formatted correctly/, formatted("CDate('not a date')"))
+  end
+
+  # The fixed patterns are strict, so a day outside the month is an error and
+  # not a roll-over into the next month.
+  it "reports an error for a date that does not exist" do
+    assert_match(/must be formatted correctly/, formatted("CDate('2025-02-30')"))
   end
 end
