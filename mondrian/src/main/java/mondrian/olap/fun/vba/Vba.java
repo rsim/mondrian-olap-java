@@ -81,10 +81,15 @@ public class Vba {
         } else if (expression == null) {
             return null;
         } else {
-            // note that this currently only supports a limited set of dates and
-            // times
-            // "October 19, 1962"
-            // "4:35:47 PM"
+            // PATCH: Try the fixed patterns before the locale formats. See
+            // CDATE_PATTERNS.
+            Date parsedDate = parseWithFixedPatterns(str);
+            if (parsedDate != null) {
+                return parsedDate;
+            }
+            // PATCH: The locale formats below accept only what the pattern of
+            // the JVM default locale accepts, so that set is not the same in
+            // every Java version. CDATE_PATTERNS holds the set that is.
             try {
                 return DateFormat.getTimeInstance().parse(str);
             } catch (ParseException ex0) {
@@ -103,6 +108,63 @@ public class Vba {
                 }
             }
         }
+    }
+
+    // PATCH: The formats below are accepted on every Java version and with
+    // every default locale. The DateFormat instances used after them come from
+    // the JVM default locale. The patterns of a locale change between Java
+    // versions. Java 8 puts no comma between the date and the time. Java 9 and
+    // later add that comma. Java 20 and later put a narrow no-break space
+    // before AM and PM. A saved MDX expression therefore gave a different
+    // result, or an error, after a Java upgrade. The locale formats stay as a
+    // fallback, so a string that no fixed pattern accepts still parses as
+    // before.
+    //
+    // The year patterns use "yy", not "yyyy". SimpleDateFormat reads "yyyy"
+    // literally, so "Nov 18, 15" would mean the year 15. With "yy" a
+    // two-digit year gets the century window, and a year of any other digit
+    // count stays literal.
+    private static final String[] CDATE_PATTERNS = {
+        "yy-MM-dd HH:mm:ss",
+        "yy-MM-dd",
+        "MMM d yy HH:mm:ss",
+        "MMM d, yy HH:mm:ss",
+        "MMM d, yy, HH:mm:ss",
+        "MMM d yy h:mm:ss a",
+        "MMM d, yy h:mm:ss a",
+        "MMM d, yy, h:mm:ss a",
+        "MMM d yy",
+        "MMM d, yy",
+        "HH:mm:ss",
+        "h:mm:ss a",
+    };
+
+    // Returns null when no fixed pattern matches the whole string.
+    //
+    // Only the fixed patterns get the normalised string. The caller keeps the
+    // raw string for the locale formats, because the pattern of a Java 20 or
+    // later locale holds the narrow no-break space itself. A normalised string
+    // stops matching that pattern, and the date-only format then reads the
+    // date and drops the time.
+    private static Date parseWithFixedPatterns(String str) {
+        // Java 20 and later format AM and PM after a narrow no-break space
+        // (CLDR 42). See https://bugs.openjdk.org/browse/JDK-8304925
+        String normalized = str.replace('\u202f', ' ').trim();
+        // One formatter for the whole loop. It must stay method-local, because
+        // SimpleDateFormat is not thread-safe and Mondrian evaluates cells
+        // concurrently. The strict mode survives applyPattern.
+        SimpleDateFormat format =
+            new SimpleDateFormat(CDATE_PATTERNS[0], Locale.US);
+        format.setLenient(false);
+        for (String pattern : CDATE_PATTERNS) {
+            format.applyPattern(pattern);
+            ParsePosition position = new ParsePosition(0);
+            Date parsed = format.parse(normalized, position);
+            if (parsed != null && position.getIndex() == normalized.length()) {
+                return parsed;
+            }
+        }
+        return null;
     }
 
     // PATCH: Coerce an Object argument to Date. VBA date functions
