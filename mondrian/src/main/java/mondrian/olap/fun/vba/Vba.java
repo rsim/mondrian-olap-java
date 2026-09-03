@@ -87,10 +87,9 @@ public class Vba {
             if (parsedDate != null) {
                 return parsedDate;
             }
-            // note that this currently only supports a limited set of dates and
-            // times
-            // "October 19, 1962"
-            // "4:35:47 PM"
+            // PATCH: The locale formats below accept only what the pattern of
+            // the JVM default locale accepts, so that set is not the same in
+            // every Java version. CDATE_PATTERNS holds the set that is.
             try {
                 return DateFormat.getTimeInstance().parse(str);
             } catch (ParseException ex0) {
