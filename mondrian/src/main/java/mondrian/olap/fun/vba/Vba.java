@@ -111,20 +111,29 @@ public class Vba {
 
     // PATCH: The formats below are accepted on every Java version and with
     // every default locale. The DateFormat instances used after them come from
-    // the JVM default locale, whose patterns change between Java versions: Java
-    // 8 puts no comma before the time, and Java 21 puts a narrow no-break space
-    // before AM/PM. A saved MDX expression therefore gave a different result,
-    // or an error, after a Java upgrade. The locale formats stay as a fallback,
-    // so an expression that works today keeps working.
+    // the JVM default locale. The patterns of a locale change between Java
+    // versions. Java 8 puts no comma between the date and the time. Java 9 and
+    // later add that comma. Java 20 and later put a narrow no-break space
+    // before AM and PM. A saved MDX expression therefore gave a different
+    // result, or an error, after a Java upgrade. The locale formats stay as a
+    // fallback, so a string that no fixed pattern accepts still parses as
+    // before.
+    //
+    // The year patterns use "yy", not "yyyy". SimpleDateFormat reads "yyyy"
+    // literally, so "Nov 18, 15" would mean the year 15. With "yy" a
+    // two-digit year gets the century window, and a year of any other digit
+    // count stays literal.
     private static final String[] CDATE_PATTERNS = {
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd",
-        "MMM d yyyy HH:mm:ss",
-        "MMM d, yyyy HH:mm:ss",
-        "MMM d yyyy h:mm:ss a",
-        "MMM d, yyyy h:mm:ss a",
-        "MMM d yyyy",
-        "MMM d, yyyy",
+        "yy-MM-dd HH:mm:ss",
+        "yy-MM-dd",
+        "MMM d yy HH:mm:ss",
+        "MMM d, yy HH:mm:ss",
+        "MMM d, yy, HH:mm:ss",
+        "MMM d yy h:mm:ss a",
+        "MMM d, yy h:mm:ss a",
+        "MMM d, yy, h:mm:ss a",
+        "MMM d yy",
+        "MMM d, yy",
         "HH:mm:ss",
         "h:mm:ss a",
     };

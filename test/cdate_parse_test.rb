@@ -31,6 +31,11 @@ describe "CDate parses strings the same way on every Java version" do
     "CDate('Nov 18 2015')" => 'Nov 18 2015 00:00:00',
     "CDate('Nov 18, 2015')" => 'Nov 18 2015 00:00:00',
     "CDate('Nov 18 2015 14:30:00')" => 'Nov 18 2015 14:30:00',
+    # Java 9 and later put a comma between the date and the time.
+    "CDate('Nov 18, 2015, 2:30:00 PM')" => 'Nov 18 2015 14:30:00',
+    "CDate('Nov 18, 2015, 14:30:00')" => 'Nov 18 2015 14:30:00',
+    # A two-digit year means the current century, as it does in VBA.
+    "CDate('Nov 18, 15')" => 'Nov 18 2015 00:00:00',
     "CDate('4:35:47 PM')" => 'Jan 01 1970 16:35:47',
     "CDate('14:30:00')" => 'Jan 01 1970 14:30:00',
     # A Date argument never reaches the string parsing.
