@@ -619,14 +619,14 @@ public class RolapConnection extends ConnectionBase {
     }
     final Query query = statement.getQuery();
     final MemoryMonitor.Listener listener = new MemoryMonitor.Listener() {
+      // PATCH: Do not add the connect string. It holds the database user and the whole schema XML, and
+      // a caller such as the mondrian-olap gem shows this message to an end user.
       public void memoryUsageNotification( long used, long max ) {
         execution.setOutOfMemory(
           "OutOfMemory used="
             + used
             + ", max="
-            + max
-            + " for connection: "
-            + getConnectString() );
+            + max );
       }
     };
     MemoryMonitor mm = MemoryMonitorFactory.getMemoryMonitor();

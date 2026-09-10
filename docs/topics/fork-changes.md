@@ -297,6 +297,14 @@ schemas can be served concurrently:
   preventing its garbage collection.
 - **Deprecation cleanups** — `new Double(...)` (removal-deprecated since
   Java 9) replaced with `Double.valueOf` in `Vba`.
+- **`OutOfMemory` message without the connect string** — the memory-monitor
+  listener in `RolapConnection#executeInternal` no longer appends
+  `getConnectString()`. The connect string carries the JDBC user and, for a
+  consumer that passes the schema inline, the whole `CatalogContent` XML
+  (~160 KB in practice); consumers surface `MemoryLimitExceededException`
+  messages to end users. The message keeps its
+  `OutOfMemory used=<n>, max=<n>` prefix, which callers match on to detect
+  the condition.
 
 ## 4. Dependency and build changes
 
