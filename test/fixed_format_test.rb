@@ -104,6 +104,14 @@ describe "Fixed default formatting for fixed-output functions" do
         end
       end
     end
+
+    # Every other case in this file renders a value below one thousand, so the
+    # group separator of the integer constant stays unproven. A span of eleven
+    # years passes one thousand days.
+    it "renders the group separator of the integer format" do
+      assert_equal '4,032',
+        formatted("DateDiff('d', DateSerial(2009, 12, 1), [Measures].[Explicit Date])")
+    end
   end
 
   describe "DateSerial defaults to a date format" do
