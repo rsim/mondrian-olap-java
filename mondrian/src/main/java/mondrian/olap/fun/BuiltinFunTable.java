@@ -695,24 +695,9 @@ public class BuiltinFunTable extends FunTableImpl {
         builder.define(CountFunDef.Resolver);
 
         // <Set>.Count
-        builder.define(
-            new FunDefBase(
-                "Count",
-                "Returns the number of tuples in a set including empty cells.",
-                "pnx")
-        {
-            public Calc compileCall(ResolvedFunCall call, ExpCompiler compiler)
-            {
-                final ListCalc listCalc =
-                        compiler.compileList(call.getArg(0));
-                return new AbstractIntegerCalc(call, new Calc[] {listCalc}) {
-                    public int evaluateInteger(Evaluator evaluator) {
-                        TupleList list = listCalc.evaluateList(evaluator);
-                        return count(evaluator, list, true);
-                    }
-                };
-            }
-        });
+        // PATCH: defined in CountFunDef so that it shares the fixed integer
+        // format string with the Count(<Set>) function form.
+        builder.define(new CountFunDef.SetPropertyFunDef());
 
         builder.define(CovarianceFunDef.CovarianceResolver);
         builder.define(CovarianceFunDef.CovarianceNResolver);

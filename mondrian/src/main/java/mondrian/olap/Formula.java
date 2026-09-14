@@ -12,6 +12,7 @@
 package mondrian.olap;
 
 import mondrian.mdx.*;
+import mondrian.olap.fun.ParenthesesFunDef;
 import mondrian.olap.type.*;
 import mondrian.resource.MondrianResource;
 import mondrian.rolap.RolapCalculatedMember;
@@ -498,13 +499,30 @@ public class Formula extends QueryPart {
             return null;
         }
 
+        // PATCH: Parentheses are a function call of their own, so a redundant
+        // pair would hide the enclosed function from the search below. Look
+        // through them to reach the function that states the format.
+        Exp enclosedExp = exp;
+        while (enclosedExp instanceof ResolvedFunCall
+            && ((ResolvedFunCall) enclosedExp).getFunDef()
+                instanceof ParenthesesFunDef)
+        {
+            enclosedExp = ((ResolvedFunCall) enclosedExp).getArg(0);
+        }
+
         // If the expression is a function that implements FormatAwareFunDef
         // (directly on the FunDef, or via a wrapped UDF), let it control
         // which argument's format to use.
-        if (exp instanceof ResolvedFunCall) {
-            ResolvedFunCall call = (ResolvedFunCall) exp;
+        if (enclosedExp instanceof ResolvedFunCall) {
+            ResolvedFunCall call = (ResolvedFunCall) enclosedExp;
             FormatAwareFunDef formatAware = call.getFormatAwareFunDef();
             if (formatAware != null) {
+                // A function with a fixed result type (e.g. DateAdd, Count)
+                // dictates its own format regardless of arguments.
+                String fixedFormat = formatAware.getFixedFormatString();
+                if (fixedFormat != null) {
+                    return Literal.createString(fixedFormat);
+                }
                 int index = formatAware.getFormatExpIndex(call.getArgs());
                 if (index == -1) {
                     // Function explicitly opts out of format inheritance.

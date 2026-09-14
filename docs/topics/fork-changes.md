@@ -153,12 +153,36 @@ deltas.
   `compileDateTime` callers (e.g. VBA `DateDiff` via `JavaFunDef`) can cast
   safely.
 - **`FormatAwareFunDef`** (new interface, `mondrian.olap`) — lets a function
-  control which argument's format string is inferred for a calculated member
-  that has no explicit FORMAT_STRING. `Formula` consults it instead of the
-  default depth-first walk (which could pick a numeric measure inside a
-  Filter condition); `MinMaxFunDef` implements it (use the value expression
-  of the 2-arg form), and `UdfResolver`'s `UdfFunDef` adapter forwards it
-  when the wrapped UDF implements the interface.
+  control the format string inferred for a calculated member that has no
+  explicit FORMAT_STRING. `Formula` consults it instead of the default
+  depth-first walk (which could pick a numeric measure inside a Filter
+  condition), and offers two strategies:
+  - **fixed format** (`#getFixedFormatString`) for a function whose result
+    type does not depend on its arguments — `Count` and `DateDiff` return a
+    number, the date functions return a date — returning one of the shared
+    `INTEGER_`/`DECIMAL_`/`DATE_`/`TIME_`/`DATE_TIME_FORMAT_STRING` constants,
+    which keeps one owner for each literal pattern;
+  - **argument-derived** (`#getFormatExpIndex`) for a function whose result
+    type follows the data, such as `MinMaxFunDef` naming the value expression
+    of its 2-arg form.
+
+  A non-null fixed format wins, and only the outermost call of the member's
+  expression is consulted — a fixed format inside a nested call does not
+  override the format its caller would otherwise infer.
+
+  `JavaFunDef` reads a `@FixedFormat` annotation on the implementing method. The
+  annotation supplies the fixed string for the `Vba` date and time functions. It
+  supplies the integer format for `DateDiff`, whose count of intervals must not
+  take the format of a date argument.
+
+  `UdfResolver`'s `UdfFunDef` adapter forwards both methods when the wrapped UDF
+  implements the interface.
+
+  A fixed format is a literal string, so a client that reads the `FORMAT_STRING`
+  cell property over XMLA now sees `#,##0` where it saw the `Standard` macro
+  before. The rendered `FmtValue` stays the same, because the macro expands to
+  that literal. `XmlaCognosTest.ref.xml` records the difference for the one
+  query in the suite that builds a member on `Count`.
 - **`skipJavaFunDefs`** — `BuiltinFunTable#defineFunctions` reads the
   `mondrian.olap.fun.skipJavaFunDefs` system property (comma-separated
   function names) and skips registering those Vba/Excel `JavaFunDef`s, so a
@@ -179,11 +203,14 @@ deltas.
   no-break space before AM and PM), so the same saved MDX expression gave a
   different result, or an error, after a Java upgrade. The locale formats
   stay as a fallback, and they keep the raw string: a Java 20 or later
-  pattern holds the narrow no-break space itself.
+  pattern holds the narrow no-break space itself. The date and time methods
+  also carry the `@FixedFormat` annotation that the `FormatAwareFunDef` entry
+  above describes.
 - **`JavaFunDef`** — argument evaluation treats the MDX null sentinel
   (`nullValue`) like Java null (upstream only checked Java null), and
   coerces `BigDecimal` arguments to `double` when the target method's
-  parameter is `double`.
+  parameter is `double`. It also implements `FormatAwareFunDef` and reads the
+  fixed format string from a `@FixedFormat` annotation on the method.
 - **`CaseMatchFunDef` / `CaseTestFunDef`** — CASE expressions accept generic
   Value-typed branches: return type falls back to the first branch's type,
   Member/Tuple branch values are compiled as scalars, and BigDecimal/Double
