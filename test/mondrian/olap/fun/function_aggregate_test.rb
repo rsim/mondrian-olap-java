@@ -23,10 +23,10 @@ describe "Aggregate and Statistical Functions" do
         all_hierarchies_except("[Customers]")
       # Depends on the current member of the Product dimension, even though
       # [Product].[All Products] is referenced from the expression.
-      assert_expression_depends_on @olap,
-        "Aggregate(Filter([Customers].[City].Members, " \
-          "(([Measures].[Unit Sales] / ([Measures].[Unit Sales], [Product].[All Products])) > 0.1)))",
-        all_hierarchies_except("[Customers]")
+      assert_expression_depends_on @olap, <<~MDX, all_hierarchies_except("[Customers]")
+        Aggregate(Filter([Customers].[City].Members,
+          (([Measures].[Unit Sales] / ([Measures].[Unit Sales], [Product].[All Products])) > 0.1)))
+      MDX
     end
 
     # Java: FunctionTest#testAggregate
