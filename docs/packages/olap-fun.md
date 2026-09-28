@@ -192,9 +192,11 @@ fork-added `#sortSiblings` / `#sortParentChildMembers` **(fork PATCH)**.
 `MemberComparator`, `TupleComparator`, and the `Hierarchize*Comparator`s do
 the comparing; `OrderKey` wraps a member's order key **(fork PATCH: null order
 keys collate first)**. `TupleExpMemoComparator` memoizes sort-key evaluation
-per tuple in a **Caffeine** cache **(fork PATCH** — replaced Guava; Caffeine
-doesn't wrap exceptions, so `CellRequestQuantumExceededException` propagates
-to the phase loop without unwrapping**)**.
+per tuple in an unbounded `HashMap` **(fork PATCH** — replaced the Guava cache
+bounded to 100000 entries, whose evictions made sorts by `Now()`-based values
+inconsistent; `HashMap` doesn't wrap exceptions, so
+`CellRequestQuantumExceededException` propagates to the phase loop without
+unwrapping**)**.
 
 **Extensions and support** — `extra/` holds non-standard functions registered
 by default: `CachedExistsFunDef` (an `Exists` variant that caches subtotal
