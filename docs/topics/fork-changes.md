@@ -190,6 +190,14 @@ deltas.
   operands are compared by double value.
 - **`CoalesceEmptyFunDef`** — resolves DateTime and generic Value argument
   types in addition to Numeric and String.
+- **`IsEmptyFunDef`** — registers DateTime overloads on both resolvers:
+  `fbD` for the `IsEmpty(<expr>)` function form and `QbD` for the
+  `<expr> IS EMPTY` postfix operator. `TypeUtil#canConvert` lets
+  `Category.DateTime` convert only to `Value` or to a DateTime constant, so
+  without them a date-typed expression matched no overload and validation
+  failed with "No function matches signature". The signatures are appended,
+  and `MultiResolver#resolve` returns on the first match, so they apply only
+  when no String, Numeric, Member or Tuple conversion does.
 - **`GenerateFunDef`** — treats a second argument that is a measure with a
   string expression as the string form of `Generate` (returning
   `StringType`), not the set form.
