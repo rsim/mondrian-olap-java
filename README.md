@@ -7,7 +7,7 @@ A fork of the Mondrian OLAP Java engine, maintained to provide the core Java lib
 - **Java** 8+ (source and target compatibility 1.8), Java 11 recommended for building
 - **Maven** for build management
 - **olap4j** 1.2.0 - Open Java API for OLAP
-- **Caffeine** 2.9.3 - Caching library (replaced Guava in this fork)
+- **Caffeine** 2.9.3 - Declared dependency, not used in code (Guava was removed in this fork)
 - **commons-lang3** - Upgraded from legacy commons-lang in this fork
 - **Log4j 2** 2.17.1 - Logging
 - **Databases**: PostgreSQL, MySQL, Oracle, Microsoft SQL Server, ClickHouse, and other JDBC-compatible databases via dialect abstraction
@@ -37,7 +37,7 @@ After making changes, build the JAR, copy it to the mondrian-olap gem, and run t
 ## Fork-Specific Patches
 
 Notable patches in this fork include:
-- Replacing Guava with Caffeine for caching
+- Removing the Guava dependency
 - Upgrading commons-lang to commons-lang3
 - Removing Pentaho maven repository dependency
 - Various bug fixes for member retrieval and SQL generation

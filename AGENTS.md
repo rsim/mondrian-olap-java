@@ -106,7 +106,7 @@ When modifying existing Mondrian Java classes or adding new functionality then u
 - **Java** 8+ (source and target compatibility 1.8), Java 11 recommended for building (see `mise.local.toml`)
 - **Maven** for build management
 - **olap4j** 1.2.0 - Open Java API for OLAP
-- **Caffeine** 2.9.3 - Caching library (replaced Guava in this fork)
+- **Caffeine** 2.9.3 - Declared dependency, not used in code (Guava was removed in this fork)
 - **commons-lang3** - Upgraded from legacy commons-lang in this fork
 - **Log4j 2** 2.17.1 - Logging
 - **Databases**: PostgreSQL, MySQL, Oracle, Microsoft SQL Server, ClickHouse, and other JDBC-compatible databases via dialect abstraction
@@ -133,7 +133,7 @@ When modifying existing Mondrian Java classes or adding new functionality then u
 ### Fork-Specific Considerations
 
 - This is a maintained fork, not the upstream Mondrian project. Changes should focus on what is needed for the mondrian-olap JRuby gem.
-- Notable fork patches include: replacing Guava with Caffeine, upgrading commons-lang to commons-lang3, removing Pentaho maven repository dependency, and various bug fixes for member retrieval and SQL generation.
+- Notable fork patches include: removing the Guava dependency, upgrading commons-lang to commons-lang3, removing Pentaho maven repository dependency, and various bug fixes for member retrieval and SQL generation.
 - Dependencies not available in public Maven repositories are stored in `lib-repo/`.
 
 ### Testing using JRuby and Minitest
