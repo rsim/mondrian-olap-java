@@ -19,6 +19,11 @@ java_import "mondrian.rolap.SqlStatement"
 #
 # The fix acquires the permit after the callback. No query runs while the callback waits, so
 # the permit covers only the query itself.
+#
+# SegmentLoader#load had the same cycle later in the load. It kept the statement open while
+# setDataToSegments put the segments in the bounded actor queue. A full queue blocked the
+# permit holder, and no actor drained the queue while it waited for a permit. The loader now
+# closes the statement after it copies the rows.
 describe "SqlStatement and the query semaphore" do
   # Records the free permit count where SqlStatement calls the hook. That call is the last
   # observable point before the segment load callback waits for the actor.
@@ -135,6 +140,22 @@ describe "SqlStatement and the query semaphore" do
       assert_equal total, permits,
         "A query permit is already held when the segment load hands over to the actor. " \
         "Holding it across the actor round trip is what makes the deadlock.\nSQL: #{sql}"
+    end
+  end
+
+  it "holds no query permit when the segment load sends the segment to the actor" do
+    semaphore = query_semaphore
+    total = semaphore.availablePermits
+
+    flush_sales_segments
+    handler = with_segment_cache_probe(semaphore) { @olap.execute(segment_mdx) }
+
+    refute_empty handler.records, "expected the query to load a segment"
+
+    handler.records.each do |permits|
+      assert_equal total, permits,
+        "A query permit is still held when the segment load sends the segment to the actor. " \
+        "A full actor queue then blocks the permit holder"
     end
   end
 
