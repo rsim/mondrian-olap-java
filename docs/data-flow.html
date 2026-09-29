@@ -1,0 +1,496 @@
+<title>Mondrian — The Life of an MDX Query</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* neutrals: slate with a faint blue bias — chosen, not defaulted */
+    --bg:        #eef1f6;
+    --panel:     #ffffff;
+    --panel-2:   #f5f7fb;
+    --ink:       #1a2230;
+    --ink-soft:  #4a566b;
+    --ink-faint: #7d8aa3;
+    --line:      #d3dae6;
+    --line-soft: #e4e9f1;
+    /* functional accents (encode real state, not decoration) */
+    --prep:      #4f5bd5;   /* prepare-time: static, compile */
+    --prep-bg:   #ecedfb;
+    --exec:      #0d9488;   /* execute-time: runtime, live */
+    --exec-bg:   #e2f4f1;
+    --sql:       #b45309;   /* SQL / phase-loop hot path */
+    --sql-bg:    #fbefdd;
+    --code-ink:  #2b3546;
+    --shadow:    0 1px 2px rgba(26,34,48,.06), 0 8px 24px -12px rgba(26,34,48,.18);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0c0f16;
+      --panel:     #141922;
+      --panel-2:   #1a212d;
+      --ink:       #e7ecf5;
+      --ink-soft:  #a7b2c6;
+      --ink-faint: #6d798f;
+      --line:      #28313f;
+      --line-soft: #1e2530;
+      --prep:      #a3abff;
+      --prep-bg:   #1c2140;
+      --exec:      #4fd6c4;
+      --exec-bg:   #0f2e2b;
+      --sql:       #f0b866;
+      --sql-bg:    #33280f;
+      --code-ink:  #cfd8e6;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:#eef1f6; --panel:#ffffff; --panel-2:#f5f7fb; --ink:#1a2230; --ink-soft:#4a566b;
+    --ink-faint:#7d8aa3; --line:#d3dae6; --line-soft:#e4e9f1;
+    --prep:#4f5bd5; --prep-bg:#ecedfb; --exec:#0d9488; --exec-bg:#e2f4f1;
+    --sql:#b45309; --sql-bg:#fbefdd; --code-ink:#2b3546;
+    --shadow:0 1px 2px rgba(26,34,48,.06), 0 8px 24px -12px rgba(26,34,48,.18);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg:#0c0f16; --panel:#141922; --panel-2:#1a212d; --ink:#e7ecf5; --ink-soft:#a7b2c6;
+    --ink-faint:#6d798f; --line:#28313f; --line-soft:#1e2530;
+    --prep:#a3abff; --prep-bg:#1c2140; --exec:#4fd6c4; --exec-bg:#0f2e2b;
+    --sql:#f0b866; --sql-bg:#33280f; --code-ink:#cfd8e6;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 500px at 80% -10%, color-mix(in srgb, var(--prep) 8%, transparent), transparent 70%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 36px) 96px; }
+
+  /* ---- masthead ---- */
+  header { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 5.2vw, 46px); line-height: 1.05; margin: 0 0 14px; font-weight: 680;
+    letter-spacing: -.02em; text-wrap: balance;
+  }
+  h1 .accent { color: var(--prep); }
+  .lede { font-size: 17px; color: var(--ink-soft); max-width: 62ch; margin: 0; }
+  .lede code { font-family: var(--mono); font-size: .88em; color: var(--code-ink); }
+
+  /* ---- legend ---- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 26px 0 0;
+    padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); box-shadow: var(--shadow);
+  }
+  .legend .item { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .sw-prep { background: var(--prep); }
+  .sw-exec { background: var(--exec); }
+  .sw-sql  { background: var(--sql); }
+
+  /* ---- phase band labels ---- */
+  .band {
+    display: flex; align-items: center; gap: 12px; margin: 40px 0 6px;
+  }
+  .band .tag {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .band.prep .tag { color: var(--prep); background: var(--prep-bg); }
+  .band.exec .tag { color: var(--exec); background: var(--exec-bg); }
+  .band .rule { flex: 1; height: 1px; background: var(--line); }
+  .band .note { font-size: 13px; color: var(--ink-faint); }
+
+  /* ---- pipeline ---- */
+  .pipe { position: relative; padding-left: 46px; }
+  .pipe::before {
+    content: ""; position: absolute; left: 19px; top: 8px; bottom: 8px; width: 2px;
+    background: linear-gradient(var(--prep) 0 58%, var(--exec) 58% 100%);
+    opacity: .35;
+  }
+  .stage { position: relative; margin: 14px 0; }
+  .stage .num {
+    position: absolute; left: -46px; top: 2px; width: 38px; height: 38px; border-radius: 50%;
+    display: grid; place-items: center; font-family: var(--mono); font-weight: 640; font-size: 15px;
+    background: var(--panel); color: var(--ink); border: 2px solid var(--line); z-index: 1;
+  }
+  .stage.p .num { border-color: var(--prep); color: var(--prep); }
+  .stage.e .num { border-color: var(--exec); color: var(--exec); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .card.p { border-left: 4px solid var(--prep); }
+  .card.e { border-left: 4px solid var(--exec); }
+  .card h2 { margin: 0 0 3px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+  .flowline {
+    font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 12px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  }
+  .flowline .io { color: var(--code-ink); font-weight: 600; }
+  .flowline .arr { color: var(--ink-faint); }
+  .desc { margin: 0 0 13px; font-size: 14.5px; color: var(--ink-soft); }
+  .desc code, .chips code { font-family: var(--mono); }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; color: var(--code-ink);
+    background: var(--panel-2); border: 1px solid var(--line-soft);
+    padding: 4px 9px; border-radius: 7px; white-space: nowrap;
+  }
+  .chip.hi { border-color: color-mix(in srgb, var(--prep) 45%, var(--line)); }
+  .card.e .chip.hi { border-color: color-mix(in srgb, var(--exec) 45%, var(--line)); }
+
+  /* ---- phase loop callout ---- */
+  .loop {
+    margin: 16px 0 4px; border: 1px solid color-mix(in srgb, var(--sql) 40%, var(--line));
+    border-radius: 14px; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .loop .head {
+    background: var(--sql-bg); padding: 13px 20px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    border-bottom: 1px solid color-mix(in srgb, var(--sql) 30%, var(--line));
+  }
+  .loop .head .k {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--sql);
+  }
+  .loop .head h3 { margin: 0; font-size: 16px; font-weight: 640; }
+  .loop .head .sub { font-size: 13px; color: var(--ink-soft); }
+  .cycle {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: var(--panel);
+  }
+  .step {
+    padding: 16px 16px 18px; position: relative; border-right: 1px dashed var(--line-soft);
+  }
+  .step:last-child { border-right: none; }
+  .step .sn { font-family: var(--mono); font-size: 12px; color: var(--sql); font-weight: 640; }
+  .step .st { font-size: 14px; font-weight: 620; margin: 4px 0 5px; }
+  .step p { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+  .step p code { font-family: var(--mono); font-size: 11.5px; color: var(--code-ink); }
+  .step::after {
+    content: "→"; position: absolute; right: -9px; top: 15px; z-index: 2;
+    color: var(--sql); font-size: 15px; background: var(--panel); padding: 0 1px;
+  }
+  .step:last-child::after {
+    content: "↺"; right: 12px; top: -22px; font-size: 18px; background: transparent;
+  }
+  .loop .foot {
+    padding: 12px 20px; font-size: 13px; color: var(--ink-soft); background: var(--panel-2);
+    border-top: 1px solid var(--line-soft);
+  }
+  .loop .foot code { font-family: var(--mono); font-size: 12px; color: var(--code-ink); }
+  .loop .foot b { color: var(--ink); font-weight: 620; }
+
+  /* ---- object cast table ---- */
+  .cast { margin-top: 52px; }
+  .cast h2 { font-size: 20px; font-weight: 650; margin: 0 0 4px; letter-spacing: -.01em; }
+  .cast .sub { margin: 0 0 16px; color: var(--ink-soft); font-size: 14px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; background: var(--panel); font-size: 13.5px; }
+  thead th {
+    text-align: left; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2);
+  }
+  tbody td { padding: 11px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td .ph {
+    font-family: var(--mono); font-size: 11px; font-weight: 640; padding: 2px 7px; border-radius: 6px;
+  }
+  .ph.p { color: var(--prep); background: var(--prep-bg); }
+  .ph.e { color: var(--exec); background: var(--exec-bg); }
+  td code { font-family: var(--mono); font-size: 12.5px; color: var(--code-ink); }
+  td.life { color: var(--ink-soft); }
+  td.life b { color: var(--sql); font-weight: 640; }
+
+  footer {
+    margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line-soft);
+    font-size: 12.5px; color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: 6px 16px;
+  }
+  footer code { font-family: var(--mono); }
+
+  @media (max-width: 680px) {
+    .cycle { grid-template-columns: 1fr 1fr; }
+    .step:nth-child(2n)::after { content: ""; }
+    .step:nth-child(-n+2) { border-bottom: 1px dashed var(--line-soft); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .stage, .loop { animation: rise .5s cubic-bezier(.2,.7,.3,1) both; }
+    .stage:nth-child(2){animation-delay:.04s} .stage:nth-child(3){animation-delay:.08s}
+    .stage:nth-child(4){animation-delay:.12s}
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Mondrian OLAP engine · docs/query-lifecycle.md</p>
+    <h1>The life of an <span class="accent">MDX query</span></h1>
+    <p class="lede">
+      One MDX statement, traced end to end through the engine — from the
+      <code>mondrian-olap</code> JRuby gem down to SQL and back. Stages 1–4 run once, while the
+      statement is <em>prepared</em>; stages 5–6 run on every <em>execute</em>. A prepared
+      <code>Query</code> is fully resolved and compiled, and can be executed repeatedly.
+    </p>
+    <div class="legend">
+      <span class="item"><span class="swatch sw-prep"></span> Prepare-time — parse, bind, compile (static)</span>
+      <span class="item"><span class="swatch sw-exec"></span> Execute-time — evaluate cells (runtime)</span>
+      <span class="item"><span class="swatch sw-sql"></span> SQL / phase-loop hot path</span>
+    </div>
+  </header>
+
+  <!-- PREPARE -->
+  <div class="band prep">
+    <span class="tag">Prepare time</span>
+    <span class="rule"></span>
+    <span class="note">runs once — in the prepared-statement constructor</span>
+  </div>
+
+  <div class="pipe">
+    <div class="stage p">
+      <div class="num">1</div>
+      <div class="card p">
+        <h2>Entry</h2>
+        <p class="flowline"><span class="io">MDX string</span> <span class="arr">→</span> olap4j prepared statement</p>
+        <p class="desc">
+          The gem drives Mondrian purely through the olap4j API.
+          <code>Connection#connect</code> loads <code>MondrianOlap4jDriver</code> by reflection and
+          unwraps a native <code>RolapConnection</code>; <code>prepareOlapStatement(mdx)</code>
+          registers the statement with the engine's <code>MondrianServer</code>.
+        </p>
+        <div class="chips">
+          <span class="chip hi">MondrianOlap4jDriver</span>
+          <span class="chip">MondrianOlap4jConnection</span>
+          <span class="chip">MondrianOlap4jPreparedStatement</span>
+          <span class="chip">MondrianServer</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage p">
+      <div class="num">2</div>
+      <div class="card p">
+        <h2>Parsing</h2>
+        <p class="flowline"><span class="io">MDX text</span> <span class="arr">→</span> <span class="io">Query</span> AST</p>
+        <p class="desc">
+          Wrapped in a <code>Locus</code> execution context, the JavaCC-generated
+          <code>MdxParserImpl</code> runs its <code>statementEof()</code> production; grammar actions
+          call <code>Parser.FactoryImpl#makeQuery</code>. Product: a <code>mondrian.olap.Query</code>
+          of <code>mondrian.mdx</code> nodes — <code>Id</code> (unbound names),
+          <code>UnresolvedFunCall</code> (operators/functions), literals.
+        </p>
+        <div class="chips">
+          <span class="chip hi">JavaccParserValidatorImpl</span>
+          <span class="chip">MdxParserImpl</span>
+          <span class="chip">Parser.FactoryImpl</span>
+          <span class="chip">mondrian.olap.Query</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage p">
+      <div class="num">3</div>
+      <div class="card p">
+        <h2>Resolution &amp; validation</h2>
+        <p class="flowline">names <span class="arr">→</span> schema objects, calls <span class="arr">→</span> <span class="io">ResolvedFunCall</span></p>
+        <p class="desc">
+          <code>Query#resolve</code> registers WITH members/sets, then
+          <code>IdBatchResolver</code> batch-binds every <code>Id</code> against the
+          <code>SchemaReader</code> (batched because member lookup can hit SQL). The
+          <code>QueryValidator</code> walks the tree; <code>FunTable</code> lookup arbitrates
+          candidate resolvers, turning each call into a typed <code>ResolvedFunCall</code>.
+        </p>
+        <div class="chips">
+          <span class="chip hi">IdBatchResolver</span>
+          <span class="chip">QueryValidator</span>
+          <span class="chip">FunTable</span>
+          <span class="chip">BuiltinFunTable</span>
+          <span class="chip">ResolvedFunCall</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage p">
+      <div class="num">4</div>
+      <div class="card p">
+        <h2>Compilation</h2>
+        <p class="flowline"><span class="io">Exp</span> trees <span class="arr">→</span> <span class="io">Calc</span> trees</p>
+        <p class="desc">
+          The final step of <code>Query#resolve</code>: <code>BetterExpCompiler</code> compiles each
+          formula, axis (<code>Query.axisCalcs</code>) and slicer (<code>Query.slicerCalc</code>)
+          into executable <code>Calc</code> objects. MDX is never interpreted from the AST — each
+          <code>FunDef#compileCall</code> emits a typed calc subtree (<code>MemberCalc</code>,
+          <code>TupleCalc</code>, list/iterable calcs, …).
+        </p>
+        <div class="chips">
+          <span class="chip hi">BetterExpCompiler</span>
+          <span class="chip">AbstractExpCompiler</span>
+          <span class="chip">Calc</span>
+          <span class="chip">MemberCalc · TupleCalc</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXECUTE -->
+  <div class="band exec">
+    <span class="tag">Execute time</span>
+    <span class="rule"></span>
+    <span class="note">runs on every <code style="font-family:var(--mono);font-size:12px">executeQuery()</code></span>
+  </div>
+
+  <div class="pipe">
+    <div class="stage e">
+      <div class="num">5</div>
+      <div class="card e">
+        <h2>Execution — the phased cell-loading loop</h2>
+        <p class="flowline"><span class="io">Query</span> <span class="arr">→</span> <span class="io">RolapResult</span> (evaluated cells)</p>
+        <p class="desc">
+          <code>executeQuery()</code> creates a <code>MondrianOlap4jCellSet</code> — which
+          <em>is</em> the <code>Execution</code> (cancellation/timeout state). It routes through the
+          <code>RolapResultShepherd</code> watchdog into <code>RolapConnection#executeInternal</code>,
+          whose <code>RolapResult</code> constructor is the entire evaluation algorithm: it builds a
+          <code>RolapEvaluator</code> (current member of every hierarchy) and a
+          <code>FastBatchingCellReader</code>, evaluates the slicer, then each axis.
+        </p>
+        <div class="chips">
+          <span class="chip hi">RolapResult</span>
+          <span class="chip">RolapResultShepherd</span>
+          <span class="chip">RolapEvaluator</span>
+          <span class="chip">FastBatchingCellReader</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- phase loop callout -->
+    <div class="loop">
+      <div class="head">
+        <span class="k">Stage 5.3 — the phase loop</span>
+        <h3>evaluate → batch → SQL → re-evaluate</h3>
+        <span class="sub">Mondrian never fetches one cell with one query. It runs speculative passes.</span>
+      </div>
+      <div class="cycle">
+        <div class="step">
+          <div class="sn">01</div>
+          <div class="st">Evaluate a pass</div>
+          <p><code>executeStripe</code> recurses over axes, positioning the shared <code>CellKey</code>, calling <code>evaluateCurrent</code> at each coordinate.</p>
+        </div>
+        <div class="step">
+          <div class="sn">02</div>
+          <div class="st">Record, don't fetch</div>
+          <p>On a cache miss <code>FastBatchingCellReader#get</code> records a <code>CellRequest</code> and returns <code>valueNotReadyException</code>. The cell stays unset.</p>
+        </div>
+        <div class="step">
+          <div class="sn">03</div>
+          <div class="st">Batch → SQL</div>
+          <p><code>loadAggregations</code> groups requests by <code>AggregationKey</code>, serves from segment caches / rollup, else emits <code>SqlQuery</code>. Results become <code>Segment</code>s.</p>
+        </div>
+        <div class="step">
+          <div class="sn">04</div>
+          <div class="st">Re-evaluate</div>
+          <p>Run again against warm caches. Calculated members can cascade new base-cell requests — loop until a pass has zero misses.</p>
+        </div>
+      </div>
+      <div class="foot">
+        <b>Control flow, not errors:</b> <code>valueNotReadyException</code> and
+        <code>CellRequestQuantumExceededException</code> must propagate to the loop — evaluation-path
+        code must never swallow them. Runaway queries stop at <code>MaxEvalDepth</code>; request
+        floods chunk at <code>CellBatchSize</code>. <code>Segment</code>s are cached
+        <b>schema-wide, beyond the query.</b>
+      </div>
+    </div>
+
+    <div class="stage e">
+      <div class="num">6</div>
+      <div class="card e">
+        <h2>Result consumption</h2>
+        <p class="flowline"><span class="io">RolapCell</span> <span class="arr">→</span> olap4j <span class="arr">→</span> <span class="io">Mondrian::OLAP::Result</span></p>
+        <p class="desc">
+          <code>RolapResult#getCell</code> returns a <code>RolapCell</code>;
+          <code>getFormattedValue</code> applies the stored <code>ValueFormatter</code> via
+          <code>mondrian.util.Format</code>. olap4j wraps it as <code>MondrianOlap4jCell</code>, and
+          the gem's <code>Result</code> walks axes and values lazily, converting Java to Ruby
+          (<code>BigDecimal</code>, CLOB → String). NON EMPTY axes are filtered here where not already
+          pushed into SQL.
+        </p>
+        <div class="chips">
+          <span class="chip hi">RolapCell</span>
+          <span class="chip">ValueFormatter</span>
+          <span class="chip">MondrianOlap4jCell</span>
+          <span class="chip">Mondrian::OLAP::Result</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- object cast -->
+  <section class="cast">
+    <h2>One query's object cast</h2>
+    <p class="sub">Who creates each object, and how long it lives.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>Object</th><th>Created by</th><th>Lives for</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="ph p">prepare</span></td>
+            <td><code>MondrianOlap4jPreparedStatement</code></td>
+            <td><code>prepareOlapStatement</code></td>
+            <td class="life">until closed</td>
+          </tr>
+          <tr>
+            <td><span class="ph p">prepare</span></td>
+            <td><code>Query</code> (resolved + compiled)</td>
+            <td><code>Parser.FactoryImpl#makeQuery</code></td>
+            <td class="life">with the statement</td>
+          </tr>
+          <tr>
+            <td><span class="ph e">execute</span></td>
+            <td><code>MondrianOlap4jCellSet</code> = <code>Execution</code></td>
+            <td><code>executeQuery</code></td>
+            <td class="life">one run</td>
+          </tr>
+          <tr>
+            <td><span class="ph e">execute</span></td>
+            <td><code>RolapResult</code></td>
+            <td><code>RolapConnection#executeInternal</code></td>
+            <td class="life">with the cell set</td>
+          </tr>
+          <tr>
+            <td><span class="ph e">execute</span></td>
+            <td><code>RolapEvaluator</code> (+ savepoint stack)</td>
+            <td><code>RolapResult#&lt;init&gt;</code></td>
+            <td class="life">one run</td>
+          </tr>
+          <tr>
+            <td><span class="ph e">execute</span></td>
+            <td><code>FastBatchingCellReader</code>, <code>CellRequest</code>s</td>
+            <td><code>RolapResult</code> / phase loop</td>
+            <td class="life">one run</td>
+          </tr>
+          <tr>
+            <td><span class="ph e">execute</span></td>
+            <td><code>Segment</code> / <code>SegmentWithData</code></td>
+            <td>aggregation pipeline</td>
+            <td class="life"><b>cached beyond the query</b> (schema-wide)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Source: <code>docs/query-lifecycle.md</code></span>
+    <span>Deep dives: <code>topics/cell-batching.md</code> · <code>sql-generation.md</code> · <code>caching.md</code> · <code>member-resolution.md</code></span>
+  </footer>
+</div>
