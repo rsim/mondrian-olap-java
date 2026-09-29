@@ -1,0 +1,373 @@
+# frozen_string_literal: true
+
+# Soak test for the SegmentCacheManager actor deadlock.
+#
+# Before the fix, SqlStatement.execute acquired a permit of the JVM wide, fair querySemaphore
+# before it ran the segment load callback. The callback sends a command to the SegmentCacheManager
+# actor and waits for the answer, so the thread kept the permit while it waited. The actor runs SQL
+# of its own, through Aggregation.optimizePredicates and RolapStar.Column.getCardinality, and that
+# SQL needs a permit too. When the permit holders wait for the actor, the actor waits for them.
+# The semaphore is fair, so each freed permit goes to the next queued loader thread, which wedges
+# in the same place. The wedged set only grows, and the engine never recovers. The fix acquires
+# the permit after the callback, so on the fixed code this soak must not latch.
+#
+# The soak runs a parallel query load, watches the JVM for the stack signature of the deadlock,
+# and compares every query result with a single thread pass. The deadlock detection can miss, so
+# a green run does not prove that the defect is absent. The exit status tells the outcome:
+#
+#   0  no deadlock and no wrong result
+#   1  deadlock detected, a real defect
+#   2  the watchdog itself failed, so the run is invalid
+#   3  the run did no useful work, so it is invalid and proves nothing
+#   4  a query result differs from the single thread pass, a real defect
+#
+# Parameters come from the environment, so that CI and a local sweep can use the same file.
+
+require 'java'
+
+def soak_int(name, default)
+  (ENV[name] || default).to_i
+end
+
+SOAK_SECONDS        = soak_int('SOAK_SECONDS', 60)
+SOAK_QUERY_LIMIT    = soak_int('SOAK_QUERY_LIMIT', 4)
+SOAK_ACTOR_THREADS  = soak_int('SOAK_ACTOR_THREADS', 2)
+SOAK_QUERY_THREADS  = soak_int('SOAK_QUERY_THREADS', 40)
+SOAK_SEGMENT_DELAY  = soak_int('SOAK_SEGMENT_DELAY_MS', 200)
+SOAK_DETECT_SECONDS = soak_int('SOAK_DETECT_SECONDS', 5)
+SOAK_FLUSH_MS       = soak_int('SOAK_FLUSH_MS', 500)
+SOAK_HOLDERS        = soak_int('SOAK_HOLDER_THREADS', SOAK_QUERY_LIMIT)
+SOAK_HOLD_MS        = soak_int('SOAK_HOLD_MS', 200)
+SOAK_DUMP_PATH      = ENV['SOAK_DUMP_PATH'] || 'tmp/soak-threads.txt'
+
+# SqlStatement reads mondrian.query.limit once, when the class loads. Set every property
+# before database_setup requires mondrian/olap.
+java.lang.System.setProperty('mondrian.query.limit', SOAK_QUERY_LIMIT.to_s)
+java.lang.System.setProperty(
+  'mondrian.rolap.agg.SegmentCacheManager.actorThreads', SOAK_ACTOR_THREADS.to_s
+)
+# The default of 20 would cap the number of MDX queries that run at the same time, and the
+# deadlock needs many more threads queued for a permit than the semaphore can admit.
+java.lang.System.setProperty('mondrian.rolap.maxQueryThreads', (SOAK_QUERY_THREADS * 2).to_s)
+
+require_relative '../support/database_setup'
+
+java_import 'java.lang.management.ManagementFactory'
+java_import 'mondrian.rolap.RolapUtil'
+java_import 'mondrian.rolap.SqlStatement'
+
+# Slows each segment load. Before the fix, the hook ran after the permit was acquired, so the
+# delay kept the permit for longer and the loader threads exhausted the semaphore. After the fix,
+# the hook runs before the acquisition, and the delay holds no permit.
+#
+# The hook also counts the actor SQL that finds no free permit. The watchdog samples the threads
+# only every 0.5 seconds and misses most short waits, but the hook sees every actor query.
+class SegmentDelayHook
+  include Java::MondrianRolap::RolapUtil::ExecuteQueryHook
+
+  attr_reader :actor_queries, :actor_contended
+
+  def initialize(delay_ms, semaphore)
+    @delay_ms = delay_ms
+    @semaphore = semaphore
+    @actor_queries = java.util.concurrent.atomic.AtomicLong.new
+    @actor_contended = java.util.concurrent.atomic.AtomicLong.new
+  end
+
+  def onExecuteQuery(sql)
+    if java.lang.Thread.currentThread.getName.start_with?(DeadlockWatchdog::ACTOR_PREFIX)
+      @actor_queries.incrementAndGet
+      @actor_contended.incrementAndGet if @semaphore.availablePermits.zero?
+    end
+    java.lang.Thread.sleep(@delay_ms) if @delay_ms.positive? && sql =~ /\bsum\(/i
+  end
+end
+
+# Watches for an actor thread parked in querySemaphore.acquire.
+#
+# ThreadMXBean.findDeadlockedThreads does not see this cycle. A Semaphore parks on AQS with no
+# owning thread, so the JVM deadlock detector has nothing to follow. The signature is the
+# evidence instead: an actor thread inside both SqlStatement.execute and Semaphore.acquire.
+#
+# A short wait is normal and resolves in milliseconds. Only a wait that persists is the latch,
+# so the watchdog reports a thread that holds the signature for SOAK_DETECT_SECONDS.
+class DeadlockWatchdog
+  ACTOR_PREFIX = 'mondrian.rolap.agg.SegmentCacheManager$ACTOR'
+
+  attr_reader :sightings, :max_persisted
+
+  def initialize(detect_seconds, dump_path)
+    @detect_seconds = detect_seconds
+    @dump_path = dump_path
+    @thread_bean = ManagementFactory.getThreadMXBean
+    @wedged_since = {}
+    @sightings = 0
+    @max_persisted = 0.0
+  end
+
+  def start
+    @thread = Thread.new do
+      begin
+        loop do
+          check
+          sleep 0.5
+        end
+      rescue StandardError => e
+        warn "Watchdog failed: #{e.class}: #{e.message}"
+        warn e.backtrace.first(5).join("\n")
+        exit!(2)
+      end
+    end
+    self
+  end
+
+  private
+
+  # Java 21 added a dumpAllThreads(boolean, boolean, int) overload, so the two argument call
+  # has to name its signature.
+  def dump_all_threads
+    @thread_bean.java_send(:dumpAllThreads, [Java::boolean, Java::boolean], true, true)
+  end
+
+  def check
+    now = Time.now
+    seen = []
+    wedged_actors.each do |info|
+      id = info.getThreadId
+      seen << id
+      @sightings += 1 unless @wedged_since.key?(id)
+      @wedged_since[id] ||= now
+      persisted = now - @wedged_since[id]
+      @max_persisted = persisted if persisted > @max_persisted
+      next if persisted < @detect_seconds
+
+      report(info)
+    end
+    @wedged_since.delete_if { |id, _| !seen.include?(id) }
+  end
+
+  def wedged_actors
+    dump_all_threads.select do |info|
+      next false unless info.getThreadName.to_s.start_with?(ACTOR_PREFIX)
+
+      frames = info.getStackTrace
+      in_semaphore = frames.any? do |f|
+        f.getClassName == 'java.util.concurrent.Semaphore' && f.getMethodName == 'acquire'
+      end
+      in_semaphore && frames.any? { |f| f.getClassName == 'mondrian.rolap.SqlStatement' }
+    end
+  end
+
+  def report(info)
+    write_dump
+    puts
+    puts '=' * 78
+    puts 'DEADLOCK DETECTED: a SegmentCacheManager actor thread is parked in ' \
+         'querySemaphore.acquire.'
+    puts "Thread: #{info.getThreadName} (#{info.getThreadState}), held for at least " \
+         "#{@detect_seconds}s."
+    puts '=' * 78
+    info.getStackTrace.first(12).each { |f| puts "    at #{f}" }
+    puts
+    puts "Full thread dump written to #{@dump_path}"
+    $stdout.flush
+    # The wedged threads never finish, so a normal exit would hang.
+    exit!(1)
+  end
+
+  def write_dump
+    require 'fileutils'
+    FileUtils.mkdir_p(File.dirname(@dump_path))
+    File.open(@dump_path, 'w') do |file|
+      file.puts "Soak parameters: query_limit=#{SOAK_QUERY_LIMIT} " \
+                "actor_threads=#{SOAK_ACTOR_THREADS} query_threads=#{SOAK_QUERY_THREADS} " \
+                "segment_delay_ms=#{SOAK_SEGMENT_DELAY} holder_threads=#{SOAK_HOLDERS} " \
+                "hold_ms=#{SOAK_HOLD_MS} driver=#{MONDRIAN_DRIVER}"
+      file.puts "Java: #{java.lang.System.getProperty('java.version')}"
+      file.puts
+      dump_all_threads.each { |i| file.puts i.to_s }
+    end
+  rescue StandardError => e
+    puts "Could not write the thread dump: #{e.class}: #{e.message}"
+  end
+end
+
+# Every thread must load a different segment, or the first thread warms the cache and the
+# others only read it. Then the loader threads never compete for the permits.
+#
+# The queries constrain two or more members of a level on purpose, because
+# Aggregation.optimizePredicates reads a column cardinality only for a list predicate that
+# holds at least two values. "Warehouse and Sales" is a virtual cube, so one batch carries
+# cell requests for more than one star.
+SLICES = [
+  '[Store].[USA].[CA]', '[Store].[USA].[OR]', '[Store].[USA].[WA]',
+  '[Store].[Mexico].[DF]', '[Store].[Mexico].[Guerrero]', '[Store].[Mexico].[Jalisco]',
+  '[Store].[Mexico].[Veracruz]', '[Store].[Mexico].[Yucatan]', '[Store].[Mexico].[Zacatecas]',
+  '[Store].[Canada].[BC]', '[Store].[USA]', '[Store].[Mexico]'
+].freeze
+
+QUARTERS = %w([Time].[1997].[Q1] [Time].[1997].[Q2] [Time].[1997].[Q3] [Time].[1997].[Q4]).freeze
+
+CUBES = [
+  ['[Sales]', '[Measures].[Store Sales], [Measures].[Unit Sales]'],
+  ['[Warehouse and Sales]', '[Measures].[Store Sales], [Measures].[Warehouse Sales]']
+].freeze
+
+QUERIES = SLICES.product(QUARTERS, CUBES).map do |slice, quarter, (cube, measures)|
+  <<~MDX
+    SELECT {#{measures}} ON 0,
+           CROSSJOIN({[Product].[Drink], [Product].[Food], [Product].[Non-Consumable]},
+                     {#{quarter}.Children}) ON 1
+    FROM #{cube}
+    WHERE {#{slice}}
+  MDX
+end.freeze
+
+puts "==> Soak: #{SOAK_SECONDS}s, query_limit=#{SOAK_QUERY_LIMIT}, " \
+     "actor_threads=#{SOAK_ACTOR_THREADS}, query_threads=#{SOAK_QUERY_THREADS}, " \
+     "segment_delay_ms=#{SOAK_SEGMENT_DELAY}, holder_threads=#{SOAK_HOLDERS}, " \
+     "hold_ms=#{SOAK_HOLD_MS}"
+
+# A cell can come from a rollup of other cached segments, which adds the doubles in another
+# order. Compare numbers with a small relative tolerance, and everything else exactly.
+def soak_same_value?(expected, actual)
+  return expected == actual unless expected.is_a?(Numeric) && actual.is_a?(Numeric)
+
+  (expected - actual).abs <= 1e-9 * [expected.abs, actual.abs, 1].max
+end
+
+def soak_same_result?(expected, actual)
+  expected[0] == actual[0] && expected[1].flatten.size == actual[1].flatten.size &&
+    expected[1].flatten.zip(actual[1].flatten).all? { |e, a| soak_same_value?(e, a) }
+end
+
+def soak_snapshot(result)
+  [result.axis_full_names, result.values]
+end
+
+# The expected results come from one thread, before the load starts. FoodMart does not change
+# during the run, so every later result must match them. The flush after the pass drops the
+# segments and the schema, so the load still starts with a cold cache.
+expected_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS)
+EXPECTED = QUERIES.map { |mdx| soak_snapshot(expected_olap.execute(mdx)) }.freeze
+expected_olap.flush_schema_cache
+puts "==> Expected results ready for #{EXPECTED.size} queries."
+
+semaphore_field = SqlStatement.java_class.getDeclaredField('querySemaphore')
+semaphore_field.setAccessible(true)
+query_semaphore = semaphore_field.get(nil)
+
+watchdog = DeadlockWatchdog.new(SOAK_DETECT_SECONDS, SOAK_DUMP_PATH).start
+hook = SegmentDelayHook.new(SOAK_SEGMENT_DELAY, query_semaphore)
+RolapUtil.setHook(hook)
+
+olap = java.util.concurrent.atomic.AtomicReference.new
+olap.set(Mondrian::OLAP::Connection.create(CONNECTION_PARAMS))
+deadline = Time.now + SOAK_SECONDS
+queries = java.util.concurrent.atomic.AtomicLong.new
+errors = java.util.concurrent.atomic.AtomicLong.new
+flushes = java.util.concurrent.atomic.AtomicLong.new
+SOAK_ERROR_SAMPLES = 5
+error_samples = java.util.concurrent.ConcurrentLinkedQueue.new
+wrong_results = java.util.concurrent.atomic.AtomicLong.new
+wrong_samples = java.util.concurrent.ConcurrentLinkedQueue.new
+
+# The schema flush runs while the queries run, not between them. Each RolapStar caches its
+# column cardinalities, and a connection keeps its schema after a flush. So the flusher opens a
+# new connection, and the query threads change to it. The new schema has new stars, so the
+# actor must run SQL for the cardinalities again. The flush has to happen while the loader
+# threads already hold every permit, or the actor gets a permit at once and nothing wedges.
+#
+# The retired connections stay open. Between queries a connection holds no JDBC connection,
+# because each statement borrows one from the shared pool, and a close would race the workers
+# that still run a query on it.
+flusher = Thread.new do
+  while Time.now < deadline
+    olap.get.flush_schema_cache
+    olap.set(Mondrian::OLAP::Connection.create(CONNECTION_PARAMS))
+    flushes.incrementAndGet
+    sleep SOAK_FLUSH_MS / 1000.0
+  end
+rescue StandardError
+  nil
+end
+
+# The fixed code frees the permit while the loader thread waits for the actor, so the loader
+# threads alone seldom use every permit. The holder threads take permits directly, so the actor
+# must wait for a permit whatever the order in SqlStatement.execute is. The fair semaphore then
+# gives the actor the next freed permit, and only a real cycle keeps it waiting.
+holders = Array.new(SOAK_HOLDERS) do
+  Thread.new do
+    while Time.now < deadline
+      query_semaphore.acquire
+      begin
+        sleep SOAK_HOLD_MS / 1000.0
+      ensure
+        query_semaphore.release
+      end
+    end
+  end
+end
+
+workers = Array.new(SOAK_QUERY_THREADS) do |i|
+  Thread.new do
+    n = i
+    while Time.now < deadline
+      begin
+        index = n % QUERIES.size
+        actual = soak_snapshot(olap.get.execute(QUERIES[index]))
+        queries.incrementAndGet
+        unless soak_same_result?(EXPECTED[index], actual)
+          if wrong_results.incrementAndGet <= SOAK_ERROR_SAMPLES
+            wrong_samples.add("query #{index}: expected #{EXPECTED[index][1].inspect}, " \
+                              "got #{actual[1].inspect}")
+          end
+        end
+      rescue StandardError => e
+        if errors.incrementAndGet <= SOAK_ERROR_SAMPLES
+          # Mondrian::OLAP::Error#message is only the olap4j wrapper text. The cause is deeper.
+          cause = e.respond_to?(:root_cause) && e.root_cause ? e.root_cause : e
+          text = (e.respond_to?(:root_cause_message) && e.root_cause_message) || e.message
+          error_samples.add("#{cause.class}: #{text.to_s.gsub(/\s+/, ' ')[0, 400]}")
+        end
+      end
+      n += SOAK_QUERY_THREADS
+    end
+  end
+end
+
+workers.each(&:join)
+holders.each(&:join)
+flusher.join
+
+RolapUtil.setHook(nil)
+puts "==> Soak finished: #{queries.get} queries, #{flushes.get} schema flushes, " \
+     "#{errors.get} query errors, no deadlock detected."
+puts "==> Actor ran #{hook.actor_queries.get} queries, #{hook.actor_contended.get} of them " \
+     "found no free permit."
+puts format('==> Watchdog saw the actor wait %d times, longest wait %.1fs (detection needs %ds).',
+            watchdog.sightings, watchdog.max_persisted, SOAK_DETECT_SECONDS)
+error_samples.each { |sample| puts "==> Query error: #{sample}" }
+puts "==> Wrong results: #{wrong_results.get} of #{queries.get} queries."
+wrong_samples.each { |sample| puts "==> Wrong result: #{sample[0, 600]}" }
+puts '==> A green soak does not prove the defect is absent. It only means it did not latch.'
+
+# A soak that loaded no segments, or never flushed the schema, proves nothing and must not
+# report success. Without a flush the column cardinalities stay known, and the actor runs no SQL.
+if queries.get.zero? || errors.get > queries.get || flushes.get.zero?
+  warn "==> The soak did no useful work: #{queries.get} queries succeeded, " \
+       "#{errors.get} failed and #{flushes.get} schema flushes completed. " \
+       "Check the queries and the flush against the #{MONDRIAN_DRIVER} driver."
+  exit!(3)
+end
+
+# A soak in which the actor never waited for a permit did not test the race, however long it ran.
+if hook.actor_contended.get.zero?
+  warn "==> The actor never waited for a permit. Raise SOAK_HOLDER_THREADS or SOAK_HOLD_MS."
+  exit!(3)
+end
+
+# A wrong result is a defect even when nothing deadlocks.
+exit!(4) if wrong_results.get.positive?
+
+exit!(0)
