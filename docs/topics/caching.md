@@ -263,7 +263,7 @@ statement hygiene, not a cache flush, and shared segments survive it.
   that SQL needs a permit too. Acquiring first made a deadlock: the permit
   holders waited for the actor, the actor waited for a permit, and the fair
   semaphore handed each freed permit to the next loader thread, which wedged in
-  the same place.
+  the same place. `test/soak/segment_cache_manager_soak.rb` reproduces it.
   (fork PATCH) For the same reason, `SegmentLoader#load` closes the statement,
   and so releases the permit, right after `processData` copies the rows. Only
   then does `setDataToSegments` send the segments to the actor. The actor queue
