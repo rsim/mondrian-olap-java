@@ -41,10 +41,12 @@ import java.util.stream.Collectors;
  * require evaluation of the complete cross product.
  */
 
-// guava cache api was marked unstable in 17.0, but is consistent with the current, stable api
-@SuppressWarnings( "UnstableApiUsage" )
+// PATCH: Remove the Guava annotation because the cache is a HashMap
+// // guava cache api was marked unstable in 17.0, but is consistent with the current, stable api
+// @SuppressWarnings( "UnstableApiUsage" )
 abstract class TupleExpMemoComparator extends TupleComparator.TupleExpComparator {
-  // PATCH: Cache the value of every tuple for the whole sort.
+  // PATCH: Cache the value of every tuple that eval evaluates, for the whole sort.
+  // HierarchicalTupleComparator compares values without eval, so this cache does not apply to it.
   // A size-bounded cache evicts values of large tuple lists, and the sort evaluates them again.
   // An expression that uses Now() returns a different value on each evaluation. The sort then gets
   // inconsistent comparison results and fails with "Comparison method violates its general contract!".
