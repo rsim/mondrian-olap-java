@@ -275,6 +275,14 @@ schemas can be served concurrently:
   `SegmentCacheWorker` and `SegmentCacheIndexImpl` are adapted to the thread
   array (index thread-safety checks accept any actor thread;
   `SegmentCacheIndexImpl` uses `ConcurrentHashMap`).
+- **`SqlStatement`** — the `querySemaphore` permit is acquired after the
+  segment load callback instead of before it. The callback waits for the
+  `SegmentCacheManager` actor, and the actor needs a permit for its own
+  cardinality SQL, so holding a permit across that wait deadlocked the engine.
+  The permit now covers only the query itself, which is what
+  `mondrian.query.limit` describes. After the permit wait, `execute` checks for
+  cancel and timeout again and only then starts the SQL timer, so a query that
+  times out in the permit queue runs no SQL, and the wait is not SQL time.
 - **`SmartMemberReader`** — the two fork-added lookup caches (§1.1) are
   `ConcurrentHashMap`s.
 - **`RolapMemberBase`** — the property-map factory produces

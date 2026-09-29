@@ -143,8 +143,6 @@ public class SqlStatement {
       locus.execution.checkCancelOrTimeout();
 
       this.jdbcConnection = dataSource.getConnection();
-      querySemaphore.acquire();
-      haveSemaphore = true;
       // Trace start of execution.
       if ( RolapUtil.SQL_LOGGER.isDebugEnabled() ) {
         StringBuilder sqllog = new StringBuilder();
@@ -171,9 +169,6 @@ public class SqlStatement {
       // Check execution state
       locus.execution.checkCancelOrTimeout();
 
-      startTimeNanos = System.nanoTime();
-      startTimeMillis = System.currentTimeMillis();
-
       if ( resultSetType < 0 || resultSetConcurrency < 0 ) {
         statement = jdbcConnection.createStatement();
       } else {
@@ -193,6 +188,20 @@ public class SqlStatement {
           callback.apply( statement );
         }
       }
+
+      // PATCH: Acquire the permit after the callback, not before it. The callback sends a
+      // command to the SegmentCacheManager actor and waits for the answer. The actor needs a
+      // permit for SQL of its own, so a thread that holds a permit while it waits for the
+      // actor makes a deadlock. The permit now covers only the query itself, which is what
+      // the mondrian.query.limit property describes. The wait for the permit can be long, so
+      // check the execution state again after it, and start the SQL timer only then.
+      querySemaphore.acquire();
+      haveSemaphore = true;
+
+      locus.execution.checkCancelOrTimeout();
+
+      startTimeNanos = System.nanoTime();
+      startTimeMillis = System.currentTimeMillis();
 
       locus.getServer().getMonitor().sendEvent(
         new SqlStatementStartEvent(
