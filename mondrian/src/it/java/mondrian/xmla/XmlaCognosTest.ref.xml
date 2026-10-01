@@ -74099,52 +74099,52 @@
                         <Cell CellOrdinal="0">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="2">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="4">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="6">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="16">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="17">
                             <Value xsi:type="xsd:double">2827.5</Value>
                             <FmtValue>2,828</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="18">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="19">
                             <Value xsi:type="xsd:double">2827.5</Value>
                             <FmtValue>2,828</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="22">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                         <Cell CellOrdinal="23">
                             <Value xsi:type="xsd:double">1</Value>
                             <FmtValue>1</FmtValue>
-                            <FormatString>Standard</FormatString>
+                            <FormatString>#,##0</FormatString>
                         </Cell>
                     </CellData>
                 </root>

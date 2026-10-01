@@ -132,6 +132,14 @@ public class UdfResolver implements Resolver {
             this.returnType = returnType;
         }
 
+        public String getFixedFormatString() {
+            if (udf instanceof FormatAwareFunDef) {
+                return ((FormatAwareFunDef) udf)
+                    .getFixedFormatString();
+            }
+            return null;
+        }
+
         public int getFormatExpIndex(Exp[] args) {
             if (udf instanceof FormatAwareFunDef) {
                 return ((FormatAwareFunDef) udf)

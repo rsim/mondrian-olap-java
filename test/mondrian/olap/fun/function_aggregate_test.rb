@@ -12,13 +12,27 @@ describe "Aggregate and Statistical Functions" do
   describe "Aggregate" do
     # Java: FunctionTest#testAggregateDepends
     it "depends on correct hierarchies" do
-      skip "assertExprDependsOn not yet available"
+      assert_expression_depends_on @olap,
+        "([Measures].[Unit Sales], [Gender].[F])",
+        all_hierarchies_except("[Measures]", "[Gender]")
+      assert_expression_depends_on @olap,
+        "Aggregate([Customers].Members, ([Measures].[Unit Sales], [Gender].[F]))",
+        all_hierarchies_except("[Customers]", "[Gender]")
+      assert_expression_depends_on @olap,
+        "Aggregate([Customers].Members)",
+        all_hierarchies_except("[Customers]")
+      # Depends on the current member of the Product dimension, even though
+      # [Product].[All Products] is referenced from the expression.
+      assert_expression_depends_on @olap, <<~MDX, all_hierarchies_except("[Customers]")
+        Aggregate(Filter([Customers].[City].Members,
+          (([Measures].[Unit Sales] / ([Measures].[Unit Sales], [Product].[All Products])) > 0.1)))
+      MDX
     end
 
     # Java: FunctionTest#testAggregate
     it "aggregates CA and OR store sales" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
-        WITH MEMBER [Store].[CA plus OR] AS 'AGGREGATE({[Store].[USA].[CA], [Store].[USA].[OR]})'
+        WITH MEMBER [Store].[CA plus OR] AS 'Aggregate({[Store].[USA].[CA], [Store].[USA].[OR]})'
         SELECT {[Measures].[Unit Sales], [Measures].[Store Sales]} ON COLUMNS,
               {[Store].[USA].[CA], [Store].[USA].[OR], [Store].[CA plus OR]} ON ROWS
         FROM Sales
@@ -108,8 +122,8 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testAggregateWithIIF
     it "aggregate with IIF condition" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
-        with member store.foo as 'iif(3>1,aggregate({[Store].[All Stores].[USA].[OR]}),aggregate({[Store].[All Stores].[USA].[CA]}))'
-        select {store.foo} on 0 from sales
+        WITH MEMBER store.foo AS 'IIf(3>1,Aggregate({[Store].[All Stores].[USA].[OR]}),Aggregate({[Store].[All Stores].[USA].[CA]}))'
+        SELECT {store.foo} ON 0 FROM Sales
       MDX
         Axis #0:
         {}
@@ -185,10 +199,10 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testAggregateToSimulateCompoundSlicer
     it "simulates compound slicer with aggregate" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
-        WITH MEMBER [Time].[Time].[1997 H1] as 'Aggregate({[Time].[1997].[Q1], [Time].[1997].[Q2]})'
-          MEMBER [Education Level].[College or higher] as 'Aggregate({[Education Level].[Bachelors Degree], [Education Level].[Graduate Degree]})'
-        SELECT {[Measures].[Unit Sales], [Measures].[Store Sales]} on columns,
-          {[Product].children} on rows
+        WITH MEMBER [Time].[Time].[1997 H1] AS 'Aggregate({[Time].[1997].[Q1], [Time].[1997].[Q2]})'
+          MEMBER [Education Level].[College or higher] AS 'Aggregate({[Education Level].[Bachelors Degree], [Education Level].[Graduate Degree]})'
+        SELECT {[Measures].[Unit Sales], [Measures].[Store Sales]} ON COLUMNS,
+          {[Product].Children} ON ROWS
         FROM [Sales]
         WHERE ([Time].[1997 H1], [Education Level].[College or higher], [Gender].[F])
       MDX
@@ -234,10 +248,10 @@ describe "Aggregate and Statistical Functions" do
         {[Product].[Drink]}
         {[Product].[Food]}
         {[Product].[Non-Consumable]}
-        Row #0: .00
-        Row #0: .00
-        Row #0: .00
-        Row #0: .00
+        Row #0: 0
+        Row #0: 0
+        Row #0: 0
+        Row #0: 0
       RESULT
     end
   end
@@ -246,7 +260,7 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testAvg
     it "computes average store sales across USA children" do
       assert_expression_returns @olap,
-        "AVG({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Avg({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "188,412.71"
     end
   end
@@ -255,7 +269,7 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testCorrelation
     it "computes correlation between unit sales and store sales" do
       assert_expression_returns @olap,
-        "Correlation({[Store].[All Stores].[USA].children}, [Measures].[Unit Sales], [Measures].[Store Sales]) * 1000000",
+        "Correlation({[Store].[All Stores].[USA].Children}, [Measures].[Unit Sales], [Measures].[Store Sales]) * 1000000",
         "999,906"
     end
   end
@@ -263,24 +277,31 @@ describe "Aggregate and Statistical Functions" do
   describe "Count" do
     # Java: FunctionTest#testCount
     it "counts members including empty" do
-      # The depends-on assertions use assertExprDependsOn which is not available
+      assert_expression_depends_on @olap,
+        "Count(CrossJoin([Store].[All Stores].[USA].Children, {[Gender].Children}), INCLUDEEMPTY)",
+        "{[Gender]}"
+
+      assert_expression_depends_on @olap,
+        "Count(CrossJoin([Store].[All Stores].[USA].Children, {[Gender].Children}), EXCLUDEEMPTY)",
+        all_hierarchies_except("[Store]")
+
       assert_expression_returns @olap,
-        "count({[Promotion Media].[Media Type].members})", "14"
+        "Count({[Promotion Media].[Media Type].Members})", "14"
 
       # applied to an empty set
       assert_expression_returns @olap,
-        "count({[Gender].Parent}, IncludeEmpty)", "0"
+        "Count({[Gender].Parent}, INCLUDEEMPTY)", "0"
     end
 
     # Java: FunctionTest#testCountExcludeEmpty
     it "counts excluding empty with crossjoin" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
-        with member [Measures].[Promo Count] as
-         ' Count(Crossjoin({[Measures].[Unit Sales]},
-         {[Promotion Media].[Media Type].members}), EXCLUDEEMPTY)'
-        select {[Measures].[Unit Sales], [Measures].[Promo Count]} on columns,
-         {[Product].[Drink].[Beverages].[Carbonated Beverages].[Soda].children} on rows
-        from Sales
+        WITH MEMBER [Measures].[Promo Count] AS
+         ' Count(CrossJoin({[Measures].[Unit Sales]},
+         {[Promotion Media].[Media Type].Members}), EXCLUDEEMPTY)'
+        SELECT {[Measures].[Unit Sales], [Measures].[Promo Count]} ON COLUMNS,
+         {[Product].[Drink].[Beverages].[Carbonated Beverages].[Soda].Children} ON ROWS
+        FROM Sales
       MDX
         Axis #0:
         {}
@@ -307,7 +328,7 @@ describe "Aggregate and Statistical Functions" do
 
       # applied to an empty set
       assert_expression_returns @olap,
-        "count({[Gender].Parent}, ExcludeEmpty)", "0"
+        "Count({[Gender].Parent}, EXCLUDEEMPTY)", "0"
     end
 
     # Java: FunctionTest#testCountExcludeEmptyNull
@@ -316,9 +337,9 @@ describe "Aggregate and Statistical Functions" do
     it "treats null as empty for EXCLUDEEMPTY" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
         WITH MEMBER [Measures].[Foo] AS
-            Iif([Time].CurrentMember.Name = 'Q2', 1, NULL)
+            IIf([Time].CurrentMember.Name = 'Q2', 1, NULL)
           MEMBER [Measures].[Bar] AS
-            Iif([Time].CurrentMember.Name = 'Q2', 1, 0)
+            IIf([Time].CurrentMember.Name = 'Q2', 1, 0)
           Member [Time].[Time].[CountExc] AS
             Count([Time].[1997].Children, EXCLUDEEMPTY),
             SOLVE_ORDER = 2
@@ -374,7 +395,7 @@ describe "Aggregate and Statistical Functions" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
         WITH
           MEMBER [Measures].[count] AS '
-            COUNT([Store Type].[Store Type].MEMBERS, EXCLUDEEMPTY)'
+            Count([Store Type].[Store Type].Members, EXCLUDEEMPTY)'
          SELECT
           {[Measures].[count]} ON AXIS(0)
          FROM [Warehouse]
@@ -392,7 +413,7 @@ describe "Aggregate and Statistical Functions" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
         WITH
           MEMBER [Measures].[count] AS '
-            COUNT([Store].MEMBERS, EXCLUDEEMPTY)'
+            Count([Store].Members, EXCLUDEEMPTY)'
          SELECT
           {[Measures].[count]} ON AXIS(0)
          FROM [Warehouse and Sales]
@@ -410,14 +431,14 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testCovariance
     it "computes covariance of unit sales and store sales" do
       assert_expression_returns @olap,
-        "Covariance({[Store].[All Stores].[USA].children}, [Measures].[Unit Sales], [Measures].[Store Sales])",
+        "Covariance({[Store].[All Stores].[USA].Children}, [Measures].[Unit Sales], [Measures].[Store Sales])",
         "1,355,761,899"
     end
 
     # Java: FunctionTest#testCovarianceN
     it "computes CovarianceN of unit sales and store sales" do
       assert_expression_returns @olap,
-        "CovarianceN({[Store].[All Stores].[USA].children}, [Measures].[Unit Sales], [Measures].[Store Sales])",
+        "CovarianceN({[Store].[All Stores].[USA].Children}, [Measures].[Unit Sales], [Measures].[Store Sales])",
         "2,033,642,849"
     end
   end
@@ -442,7 +463,7 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testMax
     it "computes max store sales across USA children" do
       assert_expression_returns @olap,
-        "MAX({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Max({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "263,793.22"
     end
 
@@ -451,11 +472,11 @@ describe "Aggregate and Statistical Functions" do
     it "handles negative values correctly" do
       assert_query_returns @olap, <<~MDX, <<~RESULT
         with
-          member [Customers].[Neg] as '-1'
-          member [Customers].[Min] as 'Min({[Customers].[Neg]})'
-          member [Customers].[Max] as 'Max({[Customers].[Neg]})'
-        select {[Customers].[Neg],[Customers].[Min],[Customers].[Max]} on 0
-        from Sales
+          member [Customers].[Neg] AS '-1'
+          member [Customers].[Min] AS 'Min({[Customers].[Neg]})'
+          member [Customers].[Max] AS 'Max({[Customers].[Neg]})'
+        SELECT {[Customers].[Neg],[Customers].[Min],[Customers].[Max]} ON 0
+        FROM Sales
       MDX
         Axis #0:
         {}
@@ -474,12 +495,12 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testMedian
     it "computes median store sales" do
       assert_expression_returns @olap,
-        "MEDIAN({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Median({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "159,167.84"
 
       # single value
       assert_expression_returns @olap,
-        "MEDIAN({[Store].[All Stores].[USA]}, [Measures].[Store Sales])",
+        "Median({[Store].[All Stores].[USA]}, [Measures].[Store Sales])",
         "565,238.13"
     end
 
@@ -564,32 +585,32 @@ describe "Aggregate and Statistical Functions" do
     it "computes percentile at various levels" do
       # same result as median
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].children}, [Measures].[Store Sales], 50)",
+        "Percentile({[Store].[All Stores].[USA].Children}, [Measures].[Store Sales], 50)",
         "159,167.84"
 
       # same result as min
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].children}, [Measures].[Store Sales], 0)",
+        "Percentile({[Store].[All Stores].[USA].Children}, [Measures].[Store Sales], 0)",
         "142,277.07"
 
       # same result as max
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].children}, [Measures].[Store Sales], 100)",
+        "Percentile({[Store].[All Stores].[USA].Children}, [Measures].[Store Sales], 100)",
         "263,793.22"
 
       # check some real percentile cases
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].[WA].children}, [Measures].[Store Sales], 50)",
+        "Percentile({[Store].[All Stores].[USA].[WA].Children}, [Measures].[Store Sales], 50)",
         "49,634.46"
 
       # the next two results correspond to MS Excel 2013.
       # See MONDRIAN-2343 jira issue.
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].[WA].children}, [Measures].[Store Sales], 100/7*2)",
+        "Percentile({[Store].[All Stores].[USA].[WA].Children}, [Measures].[Store Sales], 100/7*2)",
         "18,732.09"
 
       assert_expression_returns @olap,
-        "Percentile({[Store].[All Stores].[USA].[WA].children}, [Measures].[Store Sales], 95)",
+        "Percentile({[Store].[All Stores].[USA].[WA].Children}, [Measures].[Store Sales], 95)",
         "68,259.66"
     end
 
@@ -615,7 +636,7 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testMin
     it "computes min store sales across USA children" do
       assert_expression_returns @olap,
-        "MIN({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Min({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "142,277.07"
     end
 
@@ -631,14 +652,14 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testStdev
     it "computes standard deviation of store sales" do
       assert_expression_returns @olap,
-        "STDEV({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Stdev({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "65,825.45"
     end
 
     # Java: FunctionTest#testStdevP
     it "computes population standard deviation of store sales" do
       assert_expression_returns @olap,
-        "STDEVP({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "StdevP({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "53,746.26"
     end
   end
@@ -647,7 +668,7 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testSumNoExp
     it "sums without explicit expression" do
       assert_expression_returns @olap,
-        "SUM({[Promotion Media].[Media Type].members})", "266,773"
+        "Sum({[Promotion Media].[Media Type].Members})", "266,773"
     end
 
     # Java: FunctionTest#testValue
@@ -655,9 +676,11 @@ describe "Aggregate and Statistical Functions" do
       # VALUE is usually a cell property, not a member property.
       # We allow it because MS documents it as a function, <Member>.VALUE.
       assert_expression_returns @olap,
-        "[Measures].[Store Sales].VALUE", "565,238.13"
+        "[Measures].[Store Sales].Value", "565,238.13"
 
-      # The depends-on assertion for VALUE uses assertExprDependsOn which is not available
+      assert_expression_depends_on @olap,
+        "[Measures].[Store Sales].Value",
+        all_hierarchies_except("[Measures]")
 
       # We do not allow FORMATTED_VALUE.
       assert_query_raises @olap,
@@ -694,14 +717,14 @@ describe "Aggregate and Statistical Functions" do
     # Java: FunctionTest#testVar
     it "computes variance of store sales" do
       assert_expression_returns @olap,
-        "VAR({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "Var({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "4,332,990,493.69"
     end
 
     # Java: FunctionTest#testVarP
     it "computes population variance of store sales" do
       assert_expression_returns @olap,
-        "VARP({[Store].[All Stores].[USA].children},[Measures].[Store Sales])",
+        "VarP({[Store].[All Stores].[USA].Children},[Measures].[Store Sales])",
         "2,888,660,329.13"
     end
   end

@@ -16,6 +16,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static mondrian.olap.FormatAwareFunDef.*;
 import static mondrian.olap.fun.JavaFunDef.*;
 
 /**
@@ -74,6 +75,10 @@ public class Vba {
     @Description(
         "Returns an expression that has been converted to a Variant of subtype "
         + "Date.")
+    // A cast keeps whatever time of day its argument has, and a time-only
+    // string parses to a time on the epoch date, so the fixed format keeps
+    // the time component.
+    @FixedFormat(DATE_TIME_FORMAT_STRING)
     public static Date cDate(Object expression) {
         String str = String.valueOf(expression);
         if (expression instanceof Date) {
@@ -124,6 +129,12 @@ public class Vba {
     // literally, so "Nov 18, 15" would mean the year 15. With "yy" a
     // two-digit year gets the century window, and a year of any other digit
     // count stays literal.
+    //
+    // The patterns parse as Locale.US, so a string argument of CDate holds a
+    // Gregorian date. The other date functions build and render a date with the
+    // calendar of the default locale. A default locale with another calendar,
+    // such as th_TH, therefore gives a date that the other date functions do not
+    // match. Only the three locales with a non-Gregorian calendar are affected.
     private static final String[] CDATE_PATTERNS = {
         "yy-MM-dd HH:mm:ss",
         "yy-MM-dd",
@@ -433,6 +444,10 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing a date to which a specified time "
         + "interval has been added.")
+    // The interval can be an hour, a minute or a second, and the time of day
+    // of the date argument is carried into the result, so the fixed format
+    // keeps the time component.
+    @FixedFormat(DATE_TIME_FORMAT_STRING)
     // PATCH: Accept Object date to support Numeric-typed date expressions
     // (e.g. calculated members). See castToDate.
     public static Date dateAdd(String intervalName, double number, Object date) {
@@ -474,6 +489,9 @@ public class Vba {
     @Description(
         "Returns a Variant (Long) specifying the number of time intervals "
         + "between two specified dates.")
+    // PATCH: DateDiff returns a count of intervals, not a date. Without a
+    // fixed format the count takes the format of a date argument.
+    @FixedFormat(INTEGER_FORMAT_STRING)
     // PATCH: Accept Object dates to support Numeric-typed date expressions.
     public static long dateDiff(String interval, Object date1, Object date2) {
         return _dateDiff(
@@ -487,6 +505,9 @@ public class Vba {
     @Description(
         "Returns a Variant (Long) specifying the number of time intervals "
         + "between two specified dates.")
+    // PATCH: DateDiff returns a count of intervals, not a date. Without a
+    // fixed format the count takes the format of a date argument.
+    @FixedFormat(INTEGER_FORMAT_STRING)
     // PATCH: Accept Object dates to support Numeric-typed date expressions.
     public static long dateDiff(
         String interval, Object date1, Object date2, int firstDayOfWeek)
@@ -502,6 +523,9 @@ public class Vba {
     @Description(
         "Returns a Variant (Long) specifying the number of time intervals "
         + "between two specified dates.")
+    // PATCH: DateDiff returns a count of intervals, not a date. Without a
+    // fixed format the count takes the format of a date argument.
+    @FixedFormat(INTEGER_FORMAT_STRING)
     // PATCH: Accept Object dates to support Numeric-typed date expressions.
     public static long dateDiff(
         String interval, Object date1, Object date2,
@@ -592,6 +616,7 @@ public class Vba {
     @FunctionName("Date")
     @Signature("Date")
     @Description("Returns a Variant (Date) containing the current system date.")
+    @FixedFormat(DATE_FORMAT_STRING)
     public static Date date() {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -608,6 +633,7 @@ public class Vba {
     @Signature("DateSerial(year, month, day)")
     @Description(
         "Returns a Variant (Date) for a specified year, month, and day.")
+    @FixedFormat(DATE_FORMAT_STRING)
     public static Date dateSerial(int year, int month, int day) {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -618,6 +644,7 @@ public class Vba {
     @FunctionName("DateValue")
     @Signature("DateValue(date)")
     @Description("Returns a Variant (Date).")
+    @FixedFormat(DATE_FORMAT_STRING)
     // PATCH: Accept Object date to support Numeric-typed date expressions.
     public static Date dateValue(Object date) {
         final Calendar calendar = Calendar.getInstance();
@@ -684,6 +711,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) specifying the current date and time "
         + "according your computer's system date and time.")
+    @FixedFormat(DATE_TIME_FORMAT_STRING)
     public static Date now() {
         return new Date();
     }
@@ -706,6 +734,7 @@ public class Vba {
     @FunctionName("Time")
     @Signature("Time()")
     @Description("Returns a Variant (Date) indicating the current system time.")
+    @FixedFormat(TIME_FORMAT_STRING)
     public static Date time() {
         return new Date();
     }
@@ -717,6 +746,7 @@ public class Vba {
     @Description(
         "Returns a Variant (Date) containing the time for a specific hour, "
         + "minute, and second.")
+    @FixedFormat(TIME_FORMAT_STRING)
     public static Date timeSerial(int hour, int minute, int second) {
         final Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -729,6 +759,7 @@ public class Vba {
     @FunctionName("TimeValue")
     @Signature("TimeValue(time)")
     @Description("Returns a Variant (Date) containing the time.")
+    @FixedFormat(TIME_FORMAT_STRING)
     // PATCH: Accept Object time to support Numeric-typed date expressions.
     public static Date timeValue(Object time) {
         final Calendar calendar = Calendar.getInstance();

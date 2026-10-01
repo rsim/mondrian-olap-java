@@ -56,4 +56,51 @@ module QueryHelper
     error = assert_raises(Mondrian::OLAP::Error) { olap.execute(mdx) }
     assert_match pattern, error.message
   end
+
+  # The list of hierarchies in the FoodMart Sales cube, in cube definition
+  # order. Mirrors TestContext.AllHiers in the Java test suite; the weekly
+  # hierarchy name depends on the SsasCompatibleNaming property.
+  def all_hierarchies
+    weekly =
+      Java::MondrianOlap::MondrianProperties.instance.SsasCompatibleNaming.get ? "[Time].[Weekly]" : "[Time.Weekly]"
+    [
+      "[Measures]", "[Store]", "[Store Size in SQFT]", "[Store Type]", "[Time]", weekly,
+      "[Product]", "[Promotion Media]", "[Promotions]", "[Customers]",
+      "[Education Level]", "[Gender]", "[Marital Status]", "[Yearly Income]"
+    ]
+  end
+
+  # Builds the "{...}" string of all Sales-cube hierarchies except those given.
+  # Useful as the expected argument to assert_expression_depends_on. Mirrors
+  # TestContext.allHiersExcept.
+  def all_hierarchies_except(*hierarchies)
+    remaining = all_hierarchies
+    hierarchies.each do |hierarchy|
+      raise ArgumentError, "unknown hierarchy #{hierarchy}" unless remaining.include?(hierarchy)
+    end
+    "{#{remaining.reject { |hierarchy| hierarchies.include?(hierarchy) }.join(', ')}}"
+  end
+
+  # Assert that a scalar MDX expression depends upon a given set of hierarchies.
+  # Mirrors TestContext#assertExprDependsOn: the expression is compiled inside a
+  # calculated member and each cube hierarchy is checked via Calc#dependsOn.
+  def assert_expression_depends_on(olap, expression, hierarchy_list)
+    query_string =
+      "WITH MEMBER [Measures].[Foo] AS #{Java::MondrianOlap::Util.singleQuoteString(expression)} SELECT FROM [Sales]"
+    query = olap.raw_mondrian_connection.parseQuery(query_string)
+    query.resolve
+    parsed_expression = query.getFormulas[0].getExpression
+    check_depends_on(query, parsed_expression, hierarchy_list)
+  end
+
+  private
+
+  # Compiles the expression as a scalar, then builds the "{...}" list of cube
+  # hierarchies it depends on (in cube order) and asserts it equals the expected
+  # list. Mirrors TestContext#checkDependsOn.
+  def check_depends_on(query, expression, expected)
+    calc = query.compileExpression(expression, true, nil)
+    depends = query.getCube.getHierarchies.to_a.select { |hierarchy| calc.dependsOn(hierarchy) }.map(&:getUniqueName)
+    assert_equal expected, "{#{depends.join(', ')}}"
+  end
 end

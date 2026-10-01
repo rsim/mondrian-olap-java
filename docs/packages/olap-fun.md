@@ -159,7 +159,7 @@ where noted, and delegate the math to `FunUtil`:
 | Classes | Functions |
 |---|---|
 | `AggregateFunDef` | `Aggregate` — rolls up by the measure's own aggregator; **(fork PATCH)** can route single-dimension rollups through the distinct-count SQL path when in-memory rollup is disabled (see fork-changes §1.7) |
-| `SumFunDef`, `AvgFunDef`, `CountFunDef`, `MinMaxFunDef`, `MedianFunDef`, `PercentileFunDef` | the usual aggregates; `MinMaxFunDef` is substantially rewritten **(fork PATCH)** to support DateTime values and implements `FormatAwareFunDef` |
+| `SumFunDef`, `AvgFunDef`, `CountFunDef`, `MinMaxFunDef`, `MedianFunDef`, `PercentileFunDef` | the usual aggregates; `MinMaxFunDef` is substantially rewritten **(fork PATCH)** to support DateTime values and implements `FormatAwareFunDef` with the argument-derived strategy, while `CountFunDef` **(fork PATCH)** uses the fixed strategy — both the function and the `<Set>.Count` property form return an integer format |
 | `StdevFunDef`, `StdevPFunDef`, `VarFunDef`, `VarPFunDef`, `CovarianceFunDef`, `CorrelationFunDef`, `LinReg` | statistics; `LinReg` is the base for the five `LinRegXxx` resolvers |
 | `RankFunDef`, `CoalesceEmptyFunDef`, `IifFunDef`, `CaseTestFunDef`, `CaseMatchFunDef`, `IsEmptyFunDef`, `IsFunDef`, `IsNullFunDef` | ranking, conditionals, emptiness tests (not aggregates; grouped here by usage) |
 
@@ -181,7 +181,9 @@ compiles each argument to the `Calc` matching the Java parameter type.
 arrives as an `Object`), `JavaFunDef` treats the MDX null sentinel as Java
 null and coerces `BigDecimal`→`double`, and registration honors
 `skipJavaFunDefs` — all cataloged in
-[topics/fork-changes.md](../topics/fork-changes.md) §1.7.
+[topics/fork-changes.md](../topics/fork-changes.md) §1.7. A fourth annotation,
+`JavaFunDef.FixedFormat` **(fork PATCH)**, gives a method a fixed default
+format string, which `JavaFunDef` then supplies through `FormatAwareFunDef`.
 
 **The `sort` subpackage** — `Sorter` is the static sorting toolkit used by
 `Order`, `TopCount`, `Hierarchize`, and member-child ordering:
@@ -229,8 +231,8 @@ UDFs may keep state. Registration paths: schema
 `<UserDefinedFunction>` elements → `RolapSchema.RolapSchemaFunctionTable`;
 classpath-wide via `META-INF/services/mondrian.spi.UserDefinedFunction` →
 `GlobalFunTable`. **(fork PATCH)** `UdfResolver` returns a UDF-produced
-`TupleList` as-is (MONDRIAN-2661) and forwards `FormatAwareFunDef` from the
-wrapped UDF.
+`TupleList` as-is (MONDRIAN-2661) and forwards both `FormatAwareFunDef`
+methods from the wrapped UDF.
 
 The bundled `mondrian.udf` package (all registered through the services file):
 
