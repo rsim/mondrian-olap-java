@@ -70,6 +70,14 @@ including for parent-child hierarchies and NULL/string keys:
   ordinal/member comparison on ties — returning 0 for distinct members broke
   the total order required by `Comparator` and produced
   "Comparison method violates its general contract!".
+- `TupleExpMemoComparator` caches the sort-key value of every tuple in a
+  `HashMap` for the whole sort. The upstream Guava cache was bounded to 100000
+  entries: in a larger tuple sort it evicted values and evaluated them again.
+  A sort key that uses `Now()` (e.g. `DateDiffWorkdays(..., Now())`) returned
+  a different value on each evaluation, so `Order` failed with
+  "Comparison method violates its general contract!". The preliminary
+  evaluation phase can sort the whole crossjoin before non-empty filtering,
+  so a query with a small result can hit the limit too.
 - `SmartMemberReader#getMembersInLevel` hierarchizes level members once,
   before caching (bounded by `hierarchizeMaxLevelMembers`), and
   `FunUtil#levelMembers` skips re-hierarchizing when the hierarchy's reader is
@@ -334,7 +342,7 @@ patches:
 
 | Dependency | Upstream 9.3 | This fork | Where visible in code |
 |---|---|---|---|
-| Guava | Guava cache/annotations | **Caffeine 2.9.3** (Guava removed entirely) | `TupleExpMemoComparator` (cache swap; Caffeine does not wrap exceptions in `UncheckedExecutionException`, so `CellRequestQuantumExceededException` propagates without the unwrap dance), `Sorter` (dropped `@VisibleForTesting`) |
+| Guava | Guava cache/annotations | **Guava removed entirely**; Caffeine 2.9.3 stays a declared dependency but is not used in code | `TupleExpMemoComparator` (Guava cache replaced with an unbounded `HashMap`, which does not wrap exceptions in `UncheckedExecutionException`, so `CellRequestQuantumExceededException` propagates without the unwrap dance), `Sorter` (dropped `@VisibleForTesting`) |
 | commons-lang | `commons-lang` 2.x | **`commons-lang3` 3.17.0** | `RolapConnection`, `Recognizer`, `RolapConnectionTest`, `MondrianFoodMartLoader` (import swaps) |
 | Maven repositories | Pentaho Nexus | **local `lib-repo/` file repository only**; everything else from Maven Central | root `pom.xml` `<repositories>`; `lib-repo/` holds eigenbase-xom/-properties/-resgen, javacup, olap4j-xmla, olap4j-tck |
 | Parent POM | Pentaho parent | standalone `mondrian-olap:mondrian-parent-pom` | root `pom.xml` |

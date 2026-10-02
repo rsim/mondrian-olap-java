@@ -14,12 +14,10 @@
 
 package mondrian.olap.fun.sort;
 
-// PATCH: Replace Guava with Caffeine
+// PATCH: Replace Guava cache with HashMap
 // import com.google.common.cache.Cache;
 // import com.google.common.cache.CacheBuilder;
 // import com.google.common.util.concurrent.UncheckedExecutionException;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import mondrian.calc.Calc;
 import mondrian.olap.Evaluator;
 import mondrian.olap.Member;
@@ -28,7 +26,9 @@ import mondrian.rolap.agg.CellRequestQuantumExceededException;
 import mondrian.util.CancellationChecker;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -41,12 +41,17 @@ import java.util.stream.Collectors;
  * require evaluation of the complete cross product.
  */
 
-// guava cache api was marked unstable in 17.0, but is consistent with the current, stable api
-@SuppressWarnings( "UnstableApiUsage" )
+// PATCH: Remove the Guava annotation because the cache is a HashMap
+// // guava cache api was marked unstable in 17.0, but is consistent with the current, stable api
+// @SuppressWarnings( "UnstableApiUsage" )
 abstract class TupleExpMemoComparator extends TupleComparator.TupleExpComparator {
-  // PATCH: Replace Guava with Caffeine
+  // PATCH: Cache the value of every tuple that eval evaluates, for the whole sort.
+  // HierarchicalTupleComparator compares values without eval, so this cache does not apply to it.
+  // A size-bounded cache evicts values of large tuple lists, and the sort evaluates them again.
+  // An expression that uses Now() returns a different value on each evaluation. The sort then gets
+  // inconsistent comparison results and fails with "Comparison method violates its general contract!".
   // Cache<List<Member>, Object> valueCache = CacheBuilder.newBuilder().maximumSize( 100000 ).build();
-  Cache<List<Member>, Object> valueCache = Caffeine.newBuilder().maximumSize( 100000 ).build();
+  private final Map<List<Member>, Object> valueCache = new HashMap<>();
 
   private int[] dependentHierarchiesIndices;
   private int count = 0;
@@ -57,7 +62,7 @@ abstract class TupleExpMemoComparator extends TupleComparator.TupleExpComparator
 
   // applies the Calc to a tuple, memorizing results
   protected Object eval( List<Member> key ) {
-    // PATCH: Replace Guava with Caffeine, which does not wrap exceptions in UncheckedExecutionException
+    // PATCH: Replace Guava cache with HashMap, which does not wrap exceptions in UncheckedExecutionException
     // try {
     //   return valueCache.get( key, () -> evaluateCalc( key ) );
     // } catch ( UncheckedExecutionException e ) {
@@ -73,7 +78,7 @@ abstract class TupleExpMemoComparator extends TupleComparator.TupleExpComparator
     // } catch ( ExecutionException e ) {
     //   return evaluateCalc( key );
     // }
-    return valueCache.get( key, k -> evaluateCalc( key ) );
+    return valueCache.computeIfAbsent( key, this::evaluateCalc );
   }
 
   private List<Member> dependentMembers( List<Member> tuple ) {

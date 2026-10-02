@@ -195,7 +195,7 @@ mondrian-olap JRuby gem. Local changes are marked with `// PATCH:` comments.
 Recurring themes: concurrency hardening (concurrent maps, multi-threaded
 segment-cache actor), member-lookup extensions
 (`SchemaReader#getLevelMemberByUniqueKey`, `SchemaReader#hasMemberChildren`),
-SQL generation fixes (virtual cubes, ClickHouse), Guava → Caffeine, and
+SQL generation fixes (virtual cubes, ClickHouse), Guava removal, and
 commons-lang → commons-lang3. The full catalog is in
 [topics/fork-changes.md](topics/fork-changes.md);
 `grep -rn "PATCH:" mondrian/src/main/java` is the raw source of truth.

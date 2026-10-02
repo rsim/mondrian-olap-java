@@ -751,14 +751,14 @@ argument's format string is inherited.
 `Hierarchize`, and member-child ordering: `Sorter#sortMembers` /
 `#sortTuples`, partial (top-n) sorting via `#stablePartialSort`,
 `#hierarchizeMemberList` / `#hierarchizeTupleList`, and the `Sorter.Flag`
-direction enum. (fork PATCH) Guava replaced with Caffeine/JDK equivalents, and
+direction enum. (fork PATCH) Guava replaced with JDK equivalents, and
 two added entry points: `#sortSiblings` (sorting member children) and
 `#sortParentChildMembers` (children of several parents).
 
 | Class | Summary |
 |---|---|
 | `TupleComparator` | `Comparator<List<Member>>` base for tuple comparators; nested `TupleExpComparator` adds evaluator + calc context. |
-| `TupleExpMemoComparator` | Tuple comparator that memoizes sort-key evaluation per tuple. (fork PATCH) Guava cache → Caffeine; Caffeine doesn't wrap exceptions, so the cell-batching sentinel propagates unwrapped. |
+| `TupleExpMemoComparator` | Tuple comparator that memoizes sort-key evaluation per tuple. (fork PATCH) Bounded Guava cache → unbounded `HashMap`, so each tuple is evaluated once per sort; exceptions are not wrapped, so the cell-batching sentinel propagates unwrapped. |
 | `MemberComparator` | `Comparator<Member>` with break-hierarchy and within-hierarchy variants for `Order`. |
 | `HierarchizeComparator` | `Comparator<Member>` arranging members in prefix/postfix hierarchical order. |
 | `HierarchizeTupleComparator` | `TupleComparator` arranging tuples in hierarchical order. |
