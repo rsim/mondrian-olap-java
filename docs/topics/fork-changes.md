@@ -198,6 +198,19 @@ deltas.
   operands are compared by double value.
 - **`CoalesceEmptyFunDef`** — resolves DateTime and generic Value argument
   types in addition to Numeric and String.
+- **`BuiltinFunTable` string `+`** — registers `<String> + <String>`
+  (`iSSS`) next to the numeric `+`, as in the Microsoft MDX dialect, so
+  `"a" + "b"` concatenates instead of failing with "No function matches
+  signature". `TypeUtil#canConvert` converts neither String to Numeric nor
+  Numeric to String, so the numeric overload keeps every numeric and member
+  operand pair and a string with a number literal still fails. A string
+  with a member resolves to the string overload through the Member→String
+  conversion. The `+` and `||` operators share `compileStringConcatenation`,
+  which compiles the operands as scalars and converts a member or a number
+  value with `String.valueOf` as `Cast(<expr> AS String)` does (upstream
+  `||` failed with "Expected value of type STRING" for a numeric member
+  value), and which skips a null operand instead of rendering it as
+  "null".
 - **`IsEmptyFunDef`** — registers DateTime overloads on both resolvers:
   `fbD` for the `IsEmpty(<expr>)` function form and `QbD` for the
   `<expr> IS EMPTY` postfix operator. `TypeUtil#canConvert` lets
