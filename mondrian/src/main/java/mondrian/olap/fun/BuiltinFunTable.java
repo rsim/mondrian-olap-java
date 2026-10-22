@@ -56,6 +56,7 @@ import mondrian.olap.OlapElement;
 import mondrian.olap.Property;
 import mondrian.olap.SchemaReader;
 import mondrian.olap.Syntax;
+import mondrian.olap.Util;
 import mondrian.olap.Validator;
 import mondrian.olap.fun.extra.CachedExistsFunDef;
 import mondrian.olap.fun.extra.CalculatedChildFunDef;
@@ -1621,15 +1622,22 @@ public class BuiltinFunTable extends FunTableImpl {
         {
             public Calc compileCall(ResolvedFunCall call, ExpCompiler compiler)
             {
-                final StringCalc calc0 = compiler.compileString(call.getArg(0));
-                final StringCalc calc1 = compiler.compileString(call.getArg(1));
-                return new AbstractStringCalc(call, new Calc[] {calc0, calc1}) {
-                    public String evaluateString(Evaluator evaluator) {
-                        final String s0 = calc0.evaluateString(evaluator);
-                        final String s1 = calc1.evaluateString(evaluator);
-                        return s0 + s1;
-                    }
-                };
+                return compileStringConcatenation(call, compiler);
+            }
+        });
+
+        // PATCH: <String Expression> + <String Expression> concatenates as in
+        // the Microsoft MDX dialect. String does not convert to Numeric, so
+        // the numeric "+" overload above keeps every numeric operand pair.
+        builder.define(
+            new FunDefBase(
+                "+",
+                "Concatenates two strings.",
+                "iSSS")
+        {
+            public Calc compileCall(ResolvedFunCall call, ExpCompiler compiler)
+            {
+                return compileStringConcatenation(call, compiler);
             }
         });
 
@@ -2142,6 +2150,41 @@ public class BuiltinFunTable extends FunTableImpl {
             }
             builder.define(funDef);
         }
+    }
+
+    // PATCH: Shared by the "||" operator and the string "+" operator. The
+    // operands are compiled as scalars, so a member or a number operand
+    // converts to its string value as in Cast(<expr> AS String) instead of
+    // failing with "Expected value of type STRING". A null operand is
+    // skipped as in the Microsoft MDX dialect.
+    private static Calc compileStringConcatenation(
+        ResolvedFunCall call,
+        ExpCompiler compiler)
+    {
+        final Calc calc0 = compiler.compileScalar(call.getArg(0), false);
+        final Calc calc1 = compiler.compileScalar(call.getArg(1), false);
+        return new AbstractStringCalc(call, new Calc[] {calc0, calc1}) {
+            public String evaluateString(Evaluator evaluator) {
+                final String s0 =
+                    toConcatenatedString(calc0.evaluate(evaluator));
+                final String s1 =
+                    toConcatenatedString(calc1.evaluate(evaluator));
+                if (s0 == null) {
+                    return s1;
+                }
+                if (s1 == null) {
+                    return s0;
+                }
+                return s0 + s1;
+            }
+        };
+    }
+
+    private static String toConcatenatedString(Object value) {
+        if (value == null || value == Util.nullValue) {
+            return null;
+        }
+        return String.valueOf(value);
     }
 
     // PATCH: read skipJavaFunDefs from System directly so tests that toggle
