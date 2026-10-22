@@ -206,11 +206,12 @@ deltas.
   operand pair and a string with a number literal still fails. A string
   with a member resolves to the string overload through the Member→String
   conversion. The `+` and `||` operators share `compileStringConcatenation`,
-  which compiles the operands as scalars and converts a member or a number
-  value with `String.valueOf` as `Cast(<expr> AS String)` does (upstream
-  `||` failed with "Expected value of type STRING" for a numeric member
-  value), and which skips a null operand instead of rendering it as
-  "null".
+  which compiles the operands as scalars (upstream `||` failed with
+  "Expected value of type STRING" for a numeric member value), converts a
+  number to its plain decimal form without trailing zeros (the JDBC driver
+  decides the Java type and the scale of a cell value, so `String.valueOf`
+  gave `266773.0` on MySQL, `266773.0000` on PostgreSQL and `266773` on
+  Oracle), and skips a null operand instead of rendering it as "null".
 - **`IsEmptyFunDef`** — registers DateTime overloads on both resolvers:
   `fbD` for the `IsEmpty(<expr>)` function form and `QbD` for the
   `<expr> IS EMPTY` postfix operator. `TypeUtil#canConvert` lets

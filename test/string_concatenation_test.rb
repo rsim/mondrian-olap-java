@@ -4,7 +4,9 @@ require_relative "test_helper"
 
 # BuiltinFunTable registers "+" also with two string arguments, as in the
 # Microsoft MDX dialect, and shares its calc with "||". Both operators convert
-# a member or a number operand to its string value and skip a null operand.
+# a member or a number operand to its plain decimal string, which does not
+# depend on the Java type and scale that the JDBC driver returns, and skip a
+# null operand.
 # Numeric does not convert to String, so a string with a number literal still
 # matches no "+" overload.
 describe "String concatenation" do
@@ -24,12 +26,16 @@ describe "String concatenation" do
     assert_expression_returns @olap, %q("Unit" + " " + "Sales"), "Unit Sales"
   end
 
-  it "should concatenate a string and a measure value with +" do
-    assert_expression_returns @olap, %q("Sales: " + [Measures].[Unit Sales]), "Sales: 266773.0"
+  it "should concatenate a string and an integral measure value with +" do
+    assert_expression_returns @olap, %q("Sales: " + [Measures].[Unit Sales]), "Sales: 266773"
+  end
+
+  it "should concatenate a string and a decimal measure value with +" do
+    assert_expression_returns @olap, %q("Sales: " + [Measures].[Store Sales]), "Sales: 565238.13"
   end
 
   it "should concatenate a string and a measure value with ||" do
-    assert_expression_returns @olap, %q("Sales: " || [Measures].[Unit Sales]), "Sales: 266773.0"
+    assert_expression_returns @olap, %q("Sales: " || [Measures].[Unit Sales]), "Sales: 266773"
   end
 
   it "should concatenate a string and a member name with +" do

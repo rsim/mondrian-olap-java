@@ -11,6 +11,7 @@
 package mondrian.olap.fun;
 
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -2180,9 +2181,20 @@ public class BuiltinFunTable extends FunTableImpl {
         };
     }
 
+    // The JDBC driver decides the Java type and the scale of a cell value:
+    // the same sum is a Double on MySQL, a BigDecimal with the column scale
+    // on PostgreSQL and a BigDecimal without a scale on Oracle. The plain
+    // decimal form without trailing zeros is the same on every database.
     private static String toConcatenatedString(Object value) {
         if (value == null || value == Util.nullValue) {
             return null;
+        }
+        if (value instanceof BigDecimal) {
+            return ((BigDecimal) value).stripTrailingZeros().toPlainString();
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue())
+                .stripTrailingZeros().toPlainString();
         }
         return String.valueOf(value);
     }
