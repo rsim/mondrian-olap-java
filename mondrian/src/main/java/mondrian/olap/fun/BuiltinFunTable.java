@@ -12,6 +12,7 @@ package mondrian.olap.fun;
 
 import java.io.PrintWriter;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -2181,6 +2182,12 @@ public class BuiltinFunTable extends FunTableImpl {
         };
     }
 
+    // A double carries 15 significant decimal digits. Rounding to them
+    // removes the binary representation error of a sum, for example
+    // 565238.1299999999 becomes 565238.13.
+    private static final MathContext DOUBLE_DECIMAL_DIGITS =
+        new MathContext(15);
+
     // The JDBC driver decides the Java type and the scale of a cell value:
     // the same sum is a Double on MySQL, a BigDecimal with the column scale
     // on PostgreSQL and a BigDecimal without a scale on Oracle. The plain
@@ -2192,8 +2199,14 @@ public class BuiltinFunTable extends FunTableImpl {
         if (value instanceof BigDecimal) {
             return ((BigDecimal) value).stripTrailingZeros().toPlainString();
         }
+        if (value instanceof Integer || value instanceof Long
+            || value instanceof Short || value instanceof Byte)
+        {
+            return String.valueOf(((Number) value).longValue());
+        }
         if (value instanceof Number) {
-            return BigDecimal.valueOf(((Number) value).doubleValue())
+            return new BigDecimal(((Number) value).doubleValue())
+                .round(DOUBLE_DECIMAL_DIGITS)
                 .stripTrailingZeros().toPlainString();
         }
         return String.valueOf(value);

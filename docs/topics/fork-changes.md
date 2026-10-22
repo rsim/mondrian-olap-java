@@ -208,10 +208,12 @@ deltas.
   conversion. The `+` and `||` operators share `compileStringConcatenation`,
   which compiles the operands as scalars (upstream `||` failed with
   "Expected value of type STRING" for a numeric member value), converts a
-  number to its plain decimal form without trailing zeros (the JDBC driver
-  decides the Java type and the scale of a cell value, so `String.valueOf`
-  gave `266773.0` on MySQL, `266773.0000` on PostgreSQL and `266773` on
-  Oracle), and skips a null operand instead of rendering it as "null".
+  number to its plain decimal form without trailing zeros, a double rounded
+  to its 15 significant digits (the JDBC driver decides the Java type and
+  the scale of a cell value, so `String.valueOf` gave `266773.0` on MySQL,
+  `266773.0000` on PostgreSQL, `266773` on Oracle and `565238.1299999999`
+  for a double sum), and skips a null operand instead of rendering it as
+  "null".
 - **`IsEmptyFunDef`** — registers DateTime overloads on both resolvers:
   `fbD` for the `IsEmpty(<expr>)` function form and `QbD` for the
   `<expr> IS EMPTY` postfix operator. `TypeUtil#canConvert` lets
