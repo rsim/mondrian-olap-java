@@ -2224,6 +2224,12 @@ public class BuiltinFunTable extends FunTableImpl {
         if (value == null || value == Util.nullValue) {
             return null;
         }
+        // UdfResolver returns the exception of a failed user-defined function
+        // as its value. Throw it, so that the cell shows the error instead of
+        // the exception text.
+        if (value instanceof RuntimeException) {
+            throw (RuntimeException) value;
+        }
         if (value instanceof BigDecimal) {
             return ((BigDecimal) value).stripTrailingZeros().toPlainString();
         }

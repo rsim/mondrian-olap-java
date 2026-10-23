@@ -222,7 +222,9 @@ deltas.
   the scale of a cell value, so `String.valueOf` gave `266773.0` on MySQL,
   `266773.0000` on PostgreSQL, `266773` on Oracle and `565238.1299999999`
   for a double sum), converts Infinity and NaN as `Cast` does (the
-  `BigDecimal` constructor throws for them and fails the whole query), and
+  `BigDecimal` constructor throws for them and fails the whole query),
+  throws the exception which `UdfResolver` returns as the value of a failed
+  user-defined function (instead of concatenating the exception text), and
   skips a null operand instead of rendering it as "null".
 - **`IsEmptyFunDef`** — registers DateTime overloads on both resolvers:
   `fbD` for the `IsEmpty(<expr>)` function form and `QbD` for the

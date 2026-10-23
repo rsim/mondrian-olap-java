@@ -115,4 +115,39 @@ describe "String concatenation" do
     error = assert_raises(Mondrian::OLAP::Error) { @olap.execute(mdx) }
     assert_match "No function matches signature '<String> + <Numeric Expression>'", error.root_cause_message
   end
+
+  describe "with a failing user-defined function" do
+    before(:all) do
+      schema = define_schema do
+        cube 'Sales' do
+          table 'sales_fact_1997'
+          measure 'Unit Sales', column: 'unit_sales', aggregator: 'sum'
+        end
+        user_defined_function 'FailingString' do
+          ruby do
+            returns :string
+            def call
+              raise "FailingString failed"
+            end
+          end
+        end
+      end
+      @udf_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
+    end
+
+    after(:all) do
+      @udf_olap.close
+    end
+
+    %w(|| +).each do |operator|
+      it "should show the function error with #{operator}" do
+        mdx = <<~MDX
+          WITH MEMBER [Measures].[_Expr] AS '"Text: " #{operator} FailingString()'
+          SELECT {[Measures].[_Expr]} ON 0
+          FROM [Sales]
+        MDX
+        assert_match(/\A#ERR: .*FailingString failed/, @udf_olap.execute(mdx).formatted_values.flatten.first)
+      end
+    end
+  end
 end
