@@ -64,6 +64,22 @@ describe "String concatenation" do
     assert_expression_returns @olap, "[Measures].[Unit Sales] + [Measures].[Unit Sales]", "533,546"
   end
 
+  it "should add two Value operands with +" do
+    assert_expression_returns @olap, %q(CoalesceEmpty(1, "x") + CoalesceEmpty(2, "x")), "3"
+  end
+
+  it "should add a Value operand and NULL with +" do
+    assert_expression_returns @olap, %q(CoalesceEmpty(1, "x") + NULL), "1"
+  end
+
+  it "should add NULL and NULL with +" do
+    assert_expression_returns @olap, "NULL + NULL", ""
+  end
+
+  it "should concatenate a string and a Value operand with +" do
+    assert_expression_returns @olap, %q("Value: " + CoalesceEmpty(1, "x")), "Value: 1"
+  end
+
   it "should not add a string and a number with +" do
     mdx = <<~MDX
       WITH MEMBER [Measures].[_Expr] AS '"Sales: " + 1'

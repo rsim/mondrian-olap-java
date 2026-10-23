@@ -205,7 +205,12 @@ deltas.
   Numeric to String, so the numeric overload keeps every numeric and member
   operand pair and a string with a number literal still fails. A string
   with a member resolves to the string overload through the Member→String
-  conversion. The `+` and `||` operators share `compileStringConcatenation`,
+  conversion. A Value or Null operand, for example from `get`,
+  `CatchException` or `NULL`, converts to Numeric and to String at the same
+  cost, so the string overload resolves only when an operand has the String
+  category. Otherwise `<Value> + <Value>` matches both overloads and fails
+  with "More than one function matches signature".
+  The `+` and `||` operators share `compileStringConcatenation`,
   which compiles the operands as scalars (upstream `||` failed with
   "Expected value of type STRING" for a numeric member value), converts a
   number to its plain decimal form without trailing zeros, a double rounded

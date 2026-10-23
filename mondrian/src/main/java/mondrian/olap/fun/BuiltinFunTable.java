@@ -1631,15 +1631,34 @@ public class BuiltinFunTable extends FunTableImpl {
         // PATCH: <String Expression> + <String Expression> concatenates as in
         // the Microsoft MDX dialect. String does not convert to Numeric, so
         // the numeric "+" overload above keeps every numeric operand pair.
+        // A Value or Null operand converts to Numeric and to String at the
+        // same cost. The string overload therefore resolves only when an
+        // operand is a string. Otherwise "<Value> + <Value>" matches both
+        // overloads and fails as ambiguous.
         builder.define(
-            new FunDefBase(
-                "+",
-                "Concatenates two strings.",
-                "iSSS")
+            new SimpleResolver(
+                new FunDefBase(
+                    "+",
+                    "Concatenates two strings.",
+                    "iSSS")
+                {
+                    public Calc compileCall(
+                        ResolvedFunCall call,
+                        ExpCompiler compiler)
+                    {
+                        return compileStringConcatenation(call, compiler);
+                    }
+                })
         {
-            public Calc compileCall(ResolvedFunCall call, ExpCompiler compiler)
+            public FunDef resolve(
+                Exp[] args,
+                Validator validator,
+                List<Conversion> conversions)
             {
-                return compileStringConcatenation(call, compiler);
+                if (!hasStringOperand(args)) {
+                    return null;
+                }
+                return super.resolve(args, validator, conversions);
             }
         });
 
@@ -2180,6 +2199,15 @@ public class BuiltinFunTable extends FunTableImpl {
                 return s0 + s1;
             }
         };
+    }
+
+    private static boolean hasStringOperand(Exp[] args) {
+        for (Exp arg : args) {
+            if (arg.getCategory() == Category.String) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // A double carries 15 significant decimal digits. Rounding to them
