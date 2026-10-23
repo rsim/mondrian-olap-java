@@ -126,7 +126,7 @@ describe "String concatenation" do
     assert_match "No function matches signature '<String> + <Numeric Expression>'", error.root_cause_message
   end
 
-  describe "with a failing user-defined function" do
+  describe "with user-defined functions" do
     before(:all) do
       schema = define_schema do
         cube 'Sales' do
@@ -138,6 +138,23 @@ describe "String concatenation" do
             returns :string
             def call
               raise "FailingString failed"
+            end
+          end
+        end
+        # A Ruby integer beyond the Long range is a BigInteger in Java.
+        user_defined_function 'BigIntegerValue' do
+          ruby do
+            returns :numeric
+            def call
+              123456789012345678901234567890
+            end
+          end
+        end
+        user_defined_function 'FloatValue' do
+          ruby do
+            returns :numeric
+            def call
+              java.lang.Float.new(0.1)
             end
           end
         end
@@ -158,6 +175,26 @@ describe "String concatenation" do
         MDX
         assert_match(/\A#ERR: .*FailingString failed/, @udf_olap.execute(mdx).formatted_values.flatten.first)
       end
+    end
+
+    it "should concatenate a BigInteger value exactly" do
+      mdx = <<~MDX
+        WITH MEMBER [Measures].[_Value] AS 'BigIntegerValue()'
+        MEMBER [Measures].[_Expr] AS '"Value: " + [Measures].[_Value]'
+        SELECT {[Measures].[_Expr]} ON 0
+        FROM [Sales]
+      MDX
+      assert_equal "Value: 123456789012345678901234567890", @udf_olap.execute(mdx).formatted_values.flatten.first
+    end
+
+    it "should concatenate a Float value in its decimal form" do
+      mdx = <<~MDX
+        WITH MEMBER [Measures].[_Value] AS 'FloatValue()'
+        MEMBER [Measures].[_Expr] AS '"Value: " + [Measures].[_Value]'
+        SELECT {[Measures].[_Expr]} ON 0
+        FROM [Sales]
+      MDX
+      assert_equal "Value: 0.1", @udf_olap.execute(mdx).formatted_values.flatten.first
     end
   end
 end

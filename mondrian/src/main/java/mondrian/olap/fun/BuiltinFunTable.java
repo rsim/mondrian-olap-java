@@ -12,6 +12,7 @@ package mondrian.olap.fun;
 
 import java.io.PrintWriter;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -2235,10 +2236,13 @@ public class BuiltinFunTable extends FunTableImpl {
         if (value instanceof BigDecimal) {
             return ((BigDecimal) value).stripTrailingZeros().toPlainString();
         }
+        // A BigInteger, for example from JDBC getObject for an unsigned
+        // 64-bit column, has more digits than a double can keep.
         if (value instanceof Integer || value instanceof Long
-            || value instanceof Short || value instanceof Byte)
+            || value instanceof Short || value instanceof Byte
+            || value instanceof BigInteger)
         {
-            return String.valueOf(((Number) value).longValue());
+            return value.toString();
         }
         if (value instanceof Number) {
             final double doubleValue = ((Number) value).doubleValue();
@@ -2246,7 +2250,13 @@ public class BuiltinFunTable extends FunTableImpl {
             // Infinity and NaN, and the exception fails the whole query.
             // String.valueOf gives "Infinity" and "NaN" for them.
             if (Double.isInfinite(doubleValue) || Double.isNaN(doubleValue)) {
-                return String.valueOf(doubleValue);
+                return String.valueOf(value);
+            }
+            // Float.toString gives the shortest decimal form of a float. Its
+            // double value adds binary digits: 0.1f is 0.10000000149011612.
+            if (value instanceof Float) {
+                return new BigDecimal(value.toString())
+                    .stripTrailingZeros().toPlainString();
             }
             // A whole number double converts exactly. Rounding it to 15
             // significant digits drops the last digit of a 16 digit integer.
