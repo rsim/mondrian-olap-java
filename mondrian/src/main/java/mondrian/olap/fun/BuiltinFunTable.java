@@ -2175,9 +2175,11 @@ public class BuiltinFunTable extends FunTableImpl {
 
     // PATCH: Shared by the "||" operator and the string "+" operator. The
     // operands are compiled as scalars, so a member or a number operand
-    // converts to its string value as in Cast(<expr> AS String) instead of
-    // failing with "Expected value of type STRING". A null operand is
-    // skipped as in the Microsoft MDX dialect.
+    // converts to a string instead of failing with "Expected value of type
+    // STRING". The toConcatenatedString method gives the same string on
+    // every database, so it differs from Cast(<expr> AS String) for a
+    // decimal with trailing zeros: Cast gives "8.00", concatenation "8".
+    // A null operand is skipped as in the Microsoft MDX dialect.
     private static Calc compileStringConcatenation(
         ResolvedFunCall call,
         ExpCompiler compiler)
@@ -2242,7 +2244,7 @@ public class BuiltinFunTable extends FunTableImpl {
             final double doubleValue = ((Number) value).doubleValue();
             // The BigDecimal constructor throws NumberFormatException for
             // Infinity and NaN, and the exception fails the whole query.
-            // Cast(<expr> AS String) returns "Infinity" and "NaN" for them.
+            // String.valueOf gives "Infinity" and "NaN" for them.
             if (Double.isInfinite(doubleValue) || Double.isNaN(doubleValue)) {
                 return String.valueOf(doubleValue);
             }
