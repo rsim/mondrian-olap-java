@@ -2233,7 +2233,14 @@ public class BuiltinFunTable extends FunTableImpl {
             return String.valueOf(((Number) value).longValue());
         }
         if (value instanceof Number) {
-            return new BigDecimal(((Number) value).doubleValue())
+            final double doubleValue = ((Number) value).doubleValue();
+            // The BigDecimal constructor throws NumberFormatException for
+            // Infinity and NaN, and the exception fails the whole query.
+            // Cast(<expr> AS String) returns "Infinity" and "NaN" for them.
+            if (Double.isInfinite(doubleValue) || Double.isNaN(doubleValue)) {
+                return String.valueOf(doubleValue);
+            }
+            return new BigDecimal(doubleValue)
                 .round(DOUBLE_DECIMAL_DIGITS)
                 .stripTrailingZeros().toPlainString();
         }

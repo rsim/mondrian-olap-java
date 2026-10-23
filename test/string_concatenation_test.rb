@@ -44,6 +44,18 @@ describe "String concatenation" do
     assert_equal "Sum: 0.3", @olap.execute(mdx).formatted_values.flatten.first
   end
 
+  it "should concatenate infinite and NaN measure values" do
+    mdx = <<~MDX
+      WITH MEMBER [Measures].[_Infinity] AS '1 / 0'
+      MEMBER [Measures].[_NaN] AS '0 / 0'
+      MEMBER [Measures].[_Infinity Expr] AS '"Ratio: " || [Measures].[_Infinity]'
+      MEMBER [Measures].[_NaN Expr] AS '"Ratio: " + [Measures].[_NaN]'
+      SELECT {[Measures].[_Infinity Expr], [Measures].[_NaN Expr]} ON 0
+      FROM [Sales]
+    MDX
+    assert_equal ["Ratio: Infinity", "Ratio: NaN"], @olap.execute(mdx).formatted_values.flatten
+  end
+
   it "should concatenate a string and a measure value with ||" do
     assert_expression_returns @olap, %q("Sales: " || [Measures].[Unit Sales]), "Sales: 266773"
   end
