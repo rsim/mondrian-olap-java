@@ -3,12 +3,11 @@
 require_relative "test_helper"
 
 # BuiltinFunTable registers "+" also with two string arguments, as in the
-# Microsoft MDX dialect, and shares its calc with "||". Both operators convert
-# a member or a number operand to its plain decimal string, which depends
-# neither on the Java type and scale that the JDBC driver returns nor on the
-# binary representation error of a double, and skip a null operand.
-# Numeric does not convert to String, so a string with a number literal still
-# matches no "+" overload.
+# Microsoft MDX dialect, and with a string and a number argument, as in
+# JavaScript. It shares its calc with "||". Both operators convert a member or
+# a number operand to its plain decimal string, which depends neither on the
+# Java type and scale that the JDBC driver returns nor on the binary
+# representation error of a double, and skip a null operand.
 describe "String concatenation" do
   before(:all) do
     create_olap_connection
@@ -116,14 +115,20 @@ describe "String concatenation" do
     assert_equal ["Los Angeles"], @olap.execute(mdx).column_names
   end
 
-  it "should not add a string and a number with +" do
-    mdx = <<~MDX
-      WITH MEMBER [Measures].[_Expr] AS '"Sales: " + 1'
-      SELECT {[Measures].[_Expr]} ON 0
-      FROM [Sales]
-    MDX
-    error = assert_raises(Mondrian::OLAP::Error) { @olap.execute(mdx) }
-    assert_match "No function matches signature '<String> + <Numeric Expression>'", error.root_cause_message
+  it "should concatenate a string and a number with +" do
+    assert_expression_returns @olap, %q("Count: " + 1), "Count: 1"
+  end
+
+  it "should concatenate a number and a string with +" do
+    assert_expression_returns @olap, %q(1.5 + " units"), "1.5 units"
+  end
+
+  it "should concatenate a string and a numeric expression with +" do
+    assert_expression_returns @olap, %q("Double: " + [Measures].[Unit Sales] * 2), "Double: 533546"
+  end
+
+  it "should add numbers before a string with + from left to right" do
+    assert_expression_returns @olap, %q(1 + 2 + " units"), "3 units"
   end
 
   describe "with user-defined functions" do

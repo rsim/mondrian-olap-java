@@ -1630,26 +1630,22 @@ public class BuiltinFunTable extends FunTableImpl {
         });
 
         // PATCH: <String Expression> + <String Expression> concatenates as in
-        // the Microsoft MDX dialect. String does not convert to Numeric, so
-        // the numeric "+" overload above keeps every numeric operand pair.
+        // the Microsoft MDX dialect. A string with a number concatenates as
+        // well, as in JavaScript. String does not convert to Numeric, so the
+        // numeric "+" overload above keeps every numeric operand pair.
         // A Value or Null operand converts to Numeric and to String at the
-        // same cost. The string overload therefore resolves only when an
+        // same cost. The string overloads therefore resolve only when an
         // operand is a string. Otherwise "<Value> + <Value>" matches both
-        // overloads and fails as ambiguous.
+        // the numeric and the string "+" and fails as ambiguous.
+        // A member converts to String and to Numeric. MultiResolver returns
+        // the first matching signature, so a string with a member does not
+        // match "iSSS" and "iSSn" as two ambiguous overloads.
         builder.define(
-            new SimpleResolver(
-                new FunDefBase(
-                    "+",
-                    "Concatenates two strings.",
-                    "iSSS")
-                {
-                    public Calc compileCall(
-                        ResolvedFunCall call,
-                        ExpCompiler compiler)
-                    {
-                        return compileStringConcatenation(call, compiler);
-                    }
-                })
+            new MultiResolver(
+                "+",
+                "<String> + <String>",
+                "Concatenates two strings, or a string and a number.",
+                new String[] {"iSSS", "iSSn", "iSnS"})
         {
             public FunDef resolve(
                 Exp[] args,
@@ -1660,6 +1656,17 @@ public class BuiltinFunTable extends FunTableImpl {
                     return null;
                 }
                 return super.resolve(args, validator, conversions);
+            }
+
+            protected FunDef createFunDef(Exp[] args, FunDef dummyFunDef) {
+                return new FunDefBase(dummyFunDef) {
+                    public Calc compileCall(
+                        ResolvedFunCall call,
+                        ExpCompiler compiler)
+                    {
+                        return compileStringConcatenation(call, compiler);
+                    }
+                };
             }
         });
 

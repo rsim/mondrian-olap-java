@@ -198,18 +198,21 @@ deltas.
   operands are compared by double value.
 - **`CoalesceEmptyFunDef`** — resolves DateTime and generic Value argument
   types in addition to Numeric and String.
-- **`BuiltinFunTable` string `+`** — registers `<String> + <String>`
-  (`iSSS`) next to the numeric `+`, as in the Microsoft MDX dialect, so
-  `"a" + "b"` concatenates instead of failing with "No function matches
-  signature". `TypeUtil#canConvert` converts neither String to Numeric nor
-  Numeric to String, so the numeric overload keeps every numeric and member
-  operand pair and a string with a number literal still fails. A string
-  with a member resolves to the string overload through the Member→String
-  conversion. A Value or Null operand, for example from `CoalesceEmpty`,
-  from `Properties` with a non-literal name or `NULL`, converts to Numeric
-  and to String at the same cost, so the string overload resolves only when
-  an operand has the String category. Otherwise `<Value> + <Value>` matches both overloads and fails
-  with "More than one function matches signature".
+- **`BuiltinFunTable` string `+`** — registers a `MultiResolver` for `+`
+  with the signatures `iSSS`, `iSSn` and `iSnS` next to the numeric `+`.
+  `"a" + "b"` concatenates as in the Microsoft MDX dialect, and `"a" + 1`
+  and `1 + "a"` concatenate as in JavaScript, instead of failing with "No
+  function matches signature". `TypeUtil#canConvert` converts neither String
+  to Numeric nor Numeric to String, so the numeric overload keeps every
+  numeric and member operand pair. A member converts to String and to
+  Numeric, and `MultiResolver#resolve` returns the first matching signature,
+  so a string with a member resolves to `iSSS` and is not ambiguous. A Value
+  or Null operand, for example from `CoalesceEmpty`, from `Properties` with
+  a non-literal name or `NULL`, converts to Numeric and to String at the
+  same cost, so the string overloads resolve only when an operand has the
+  String category. Otherwise `<Value> + <Value>` matches both the numeric
+  and the string `+` and fails with "More than one function matches
+  signature".
   `RolapNativeSql` excludes a String-returning `+` from the numeric `+`
   SQL compiler. `FunCallSqlCompilerBase#match` compares categories bitwise
   and String (9) passes the Numeric (7) check, so a native Filter compiled
