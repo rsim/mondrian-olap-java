@@ -2246,6 +2246,11 @@ public class BuiltinFunTable extends FunTableImpl {
             if (Double.isInfinite(doubleValue) || Double.isNaN(doubleValue)) {
                 return String.valueOf(doubleValue);
             }
+            // A whole number double converts exactly. Rounding it to 15
+            // significant digits drops the last digit of a 16 digit integer.
+            if (doubleValue == Math.rint(doubleValue)) {
+                return new BigDecimal(doubleValue).toPlainString();
+            }
             return new BigDecimal(doubleValue)
                 .round(DOUBLE_DECIMAL_DIGITS)
                 .stripTrailingZeros().toPlainString();

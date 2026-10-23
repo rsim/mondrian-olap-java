@@ -44,6 +44,16 @@ describe "String concatenation" do
     assert_equal "Sum: 0.3", @olap.execute(mdx).formatted_values.flatten.first
   end
 
+  it "should concatenate a 16 digit integral double exactly" do
+    mdx = <<~MDX
+      WITH MEMBER [Measures].[_Sum] AS '1000000000000000 + 1'
+      MEMBER [Measures].[_Expr] AS '"Sum: " + [Measures].[_Sum]'
+      SELECT {[Measures].[_Expr]} ON 0
+      FROM [Sales]
+    MDX
+    assert_equal "Sum: 1000000000000001", @olap.execute(mdx).formatted_values.flatten.first
+  end
+
   it "should concatenate infinite and NaN measure values" do
     mdx = <<~MDX
       WITH MEMBER [Measures].[_Infinity] AS '1 / 0'
