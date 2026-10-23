@@ -92,6 +92,20 @@ describe "String concatenation" do
     assert_expression_returns @olap, %q("Value: " + CoalesceEmpty(1, "x")), "Value: 1"
   end
 
+  # RolapNativeSql compiles a numeric Filter condition to SQL. A string + condition is evaluated in Java.
+  it "should filter with a string + condition" do
+    mdx = %q(SELECT Filter([Store].[Store City].Members, ("1" + "2") = "12") ON 0 FROM [Sales])
+    assert_equal 24, @olap.execute(mdx).column_names.size
+  end
+
+  it "should filter with a string + measure value condition" do
+    mdx = <<~MDX
+      SELECT Filter([Store].[Store City].Members, ("Sales: " + [Measures].[Unit Sales]) = "Sales: 25663") ON 0
+      FROM [Sales]
+    MDX
+    assert_equal ["Los Angeles"], @olap.execute(mdx).column_names
+  end
+
   it "should not add a string and a number with +" do
     mdx = <<~MDX
       WITH MEMBER [Measures].[_Expr] AS '"Sales: " + 1'

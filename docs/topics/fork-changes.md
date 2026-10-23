@@ -210,6 +210,10 @@ deltas.
   cost, so the string overload resolves only when an operand has the String
   category. Otherwise `<Value> + <Value>` matches both overloads and fails
   with "More than one function matches signature".
+  `RolapNativeSql` excludes a String-returning `+` from the numeric `+`
+  SQL compiler. `FunCallSqlCompilerBase#match` compares categories bitwise
+  and String (9) passes the Numeric (7) check, so a native Filter compiled
+  `("1" + "2") = "12"` to `(1 + 2) = 12`.
   The `+` and `||` operators share `compileStringConcatenation`,
   which compiles the operands as scalars (upstream `||` failed with
   "Expected value of type STRING" for a numeric member value), converts a
