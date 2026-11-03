@@ -16,3 +16,8 @@ depends = ["package"]
 [tasks.java_test]
 description = "Run Java tests, optionally filtered by test class name (e.g., mise java_test NativeFilterMatchingTest)"
 run = "bin/java_test"
+
+[tasks.release]
+description = "Check the release version, run tests, create the version tag and push it to origin"
+# Check before the slow tests and again before tagging (release:tag depends on release:check).
+run = ["rake release:check", "mise run test", "rake release:tag"]
