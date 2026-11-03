@@ -26,7 +26,9 @@ import java.util.*;
  * @author wgorman, jhyde
  * @since Jan 5, 2008
 */
-public class JavaFunDef extends FunDefBase {
+public class JavaFunDef extends FunDefBase
+    implements FormatAwareFunDef
+{
     private static final Map<Class, Integer> mapClazzToCategory =
         new HashMap<Class, Integer>();
     private static final String className = JavaFunDef.class.getName();
@@ -48,6 +50,8 @@ public class JavaFunDef extends FunDefBase {
     }
 
     private final Method method;
+    // Fixed default format string from the @FixedFormat annotation, or null.
+    private final String fixedFormatString;
 
     /**
      * Creates a JavaFunDef.
@@ -58,6 +62,7 @@ public class JavaFunDef extends FunDefBase {
      * @param returnCategory Return type
      * @param paramCategories Parameter types
      * @param method Java method which implements this function
+     * @param fixedFormatString Fixed default format string, or null
      */
     public JavaFunDef(
         String name,
@@ -65,10 +70,19 @@ public class JavaFunDef extends FunDefBase {
         Syntax syntax,
         int returnCategory,
         int[] paramCategories,
-        Method method)
+        Method method,
+        String fixedFormatString)
     {
         super(name, null, desc, syntax, returnCategory, paramCategories);
         this.method = method;
+        this.fixedFormatString = fixedFormatString;
+    }
+
+    // A method tagged with @FixedFormat returns a value of a fixed type
+    // (e.g. DateAdd always returns a date), so a calculated member using it
+    // should default to that format rather than inheriting a member's format.
+    public String getFixedFormatString() {
+        return fixedFormatString;
     }
 
     public Calc compileCall(
@@ -111,13 +125,17 @@ public class JavaFunDef extends FunDefBase {
         Syntax syntax =
             getAnnotation(
                 method, className + "$SyntaxDef", Syntax.Function);
+        String fixedFormatString =
+            getAnnotation(
+                method, className + "$FixedFormat", (String) null);
 
         int returnCategory = getReturnCategory(method);
 
         int paramCategories[] = getParameterCategories(method);
 
         return new JavaFunDef(
-            name, desc, syntax, returnCategory, paramCategories, method);
+            name, desc, syntax, returnCategory, paramCategories, method,
+            fixedFormatString);
     }
 
     /**
@@ -297,6 +315,18 @@ public class JavaFunDef extends FunDefBase {
     public @interface SyntaxDef
     {
         public abstract Syntax value();
+    }
+
+    /**
+     * Annotation which tags a Java method whose MDX function has a fixed
+     * result type with the format string a calculated member using it should
+     * default to (e.g. {@code "mmm dd yyyy"} for a date-returning function).
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    public @interface FixedFormat
+    {
+        public abstract String value();
     }
 
     /**

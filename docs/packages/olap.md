@@ -91,7 +91,7 @@ schema objects and `UnresolvedFunCall`s into typed `ResolvedFunCall`s.
 | `IdBatchResolver` | Pre-pass of `Query#resolve`: gathers `Id`s and resolves them against the `SchemaReader` in batches (member lookup may need SQL — per-identifier resolution would be pathological) |
 | `FunTable` | The registry of MDX functions the validator consults (`FunTable#getResolvers`); layered implementations live in `mondrian.olap.fun` and `RolapSchema` — see [olap-fun.md](olap-fun.md) |
 | `FunDef` | One resolved function definition: validates args, computes result type, and compiles itself to a `Calc` (`FunDef#compileCall`) |
-| `FormatAwareFunDef` | (fork PATCH) lets a `FunDef` or UDF steer which argument's format string a calculated member inherits (used by `Formula`'s format inference) |
+| `FormatAwareFunDef` | (fork PATCH) lets a `FunDef` or UDF steer the format string a calculated member infers, either as a fixed literal (`#getFixedFormatString`, which wins) or by naming the argument whose format to inherit (`#getFormatExpIndex`); also the home of the shared `*_FORMAT_STRING` constants |
 | `Syntax` | How a call is written: Function, Property, Method, Infix, Prefix, Braces, Parentheses, … — part of the function-lookup key |
 | `Category` | Ordinal codes for expression categories (Member, Set, Numeric, …), used in `FunDef` signatures; the class-based counterpart is `mondrian.olap.type` below |
 
