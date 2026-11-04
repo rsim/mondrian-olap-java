@@ -965,9 +965,11 @@ describe "Access control" do
     RESULT
   end
 
+  # The Java test granted NONE on the Sales cube, so the query failed with
+  # "cube 'Sales' not found" before it reached [Store]. CUSTOM makes the cube
+  # visible, and its dimensions do not inherit the CUSTOM access.
   # Java: AccessControlTest#_testSharedObjectsInGrantMappingsBug
   it "should not share objects in the grant mappings" do
-    skip "Disabled in the Java test"
     olap = foodmart_connection
     connection = olap.raw_mondrian_connection
     schema = connection.getSchema
@@ -978,7 +980,7 @@ describe "Access control" do
 
     role = RoleImpl.new
     role.grant(schema, Access::NONE)
-    role.grant(sales_cube, Access::NONE)
+    role.grant(sales_cube, Access::CUSTOM)
     # For using hierarchy Measures in assert_expression_raises
     role.grant(measures_in_sales, Access::ALL, nil, nil, ROLLUP_POLICY::FULL)
     role.grant(warehouse_cube, Access::NONE)
