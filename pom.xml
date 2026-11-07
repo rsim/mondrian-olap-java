@@ -22,7 +22,7 @@
     <url>scm:git:git@github.com:rsim/mondrian-olap-java.git</url>
   </scm>
   <properties>
-    <revision>1.4.0</revision>
+    <revision>1.4.1</revision>
     <license.licenseName>epl_only_v1</license.licenseName>
 
     <olap4j.version>1.2.0</olap4j.version>
