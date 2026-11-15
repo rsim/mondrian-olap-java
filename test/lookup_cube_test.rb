@@ -64,7 +64,12 @@ describe "LookupCube" do
     expected = values(warehouse_query(measure, rows: rows, where: where, with: with))
     actual = values(lookup_query(formula, rows: rows, where: where, with: with))
     refute_empty expected.flatten.compact, "expected Warehouse values"
-    assert_equal expected, actual
+    # Values that are rolled up from other cached segments can differ in the last digits.
+    assert_equal round_values(expected), round_values(actual)
+  end
+
+  def round_values(values)
+    values.map { |value| value.is_a?(Array) ? round_values(value) : value.is_a?(Float) ? value.round(6) : value }
   end
 
   def flush_cube_cache(cube_name)
