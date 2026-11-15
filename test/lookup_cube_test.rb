@@ -621,8 +621,9 @@ describe "LookupCube" do
       MDX
     end
 
-    def crossjoin_product_names(measures)
+    def crossjoin_product_names(measures, with: nil)
       @only_olap.execute(<<~MDX).row_names.map(&:first)
+        #{"WITH #{with}" if with}
         SELECT {#{measures}} ON COLUMNS,
           NON EMPTY CrossJoin([Product].[Product Name].Members, {[Store].[USA]}) ON ROWS
         FROM [Inventory]
@@ -641,6 +642,13 @@ describe "LookupCube" do
     it "keeps them in NON EMPTY crossjoin rows of measures that a function selects" do
       sales_products = product_names("Sales", "Unit Sales")
       actual = crossjoin_product_names("AddCalculatedMembers([Measures].Members)")
+      assert_empty sales_products - actual
+    end
+
+    it "keeps them in NON EMPTY crossjoin rows of measures that a function selects next to a LookupCube formula" do
+      sales_products = product_names("Sales", "Unit Sales")
+      actual = crossjoin_product_names("AddCalculatedMembers([Measures].Members)",
+        with: %q{MEMBER [Store].[Lookup] AS 'LookupCube("Sales", "[Measures].[Unit Sales]")'})
       assert_empty sales_products - actual
     end
 

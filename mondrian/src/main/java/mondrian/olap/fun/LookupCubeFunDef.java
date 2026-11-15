@@ -264,7 +264,9 @@ public class LookupCubeFunDef extends FunDefBase {
         private boolean selectsMeasures;
 
         void visitExp(Exp exp) {
-            if (!found && exp != null) {
+            // The traversal continues after a LookupCube call, because it
+            // also notes whether measures are selected with a function.
+            if (!(found && selectsMeasures) && exp != null) {
                 exp.accept(this);
             }
         }
