@@ -56,4 +56,18 @@ describe "Segment rollup" do
     flush_warehouse_segments
     assert_equal warehouse_sales("[Store].[USA].Children"), rolled_up
   end
+
+  it "rolls up segments whose kept column values a segment narrows" do
+    flush_warehouse_segments
+    expected = warehouse_sales("[Store].[USA].Children")
+
+    # Only the segment of [WA] has Q1, so a rollup of these segments has only [WA].
+    flush_warehouse_segments
+    warehouse_sales("CrossJoin([Store].[USA].Children, {[Time].[1997].[Q4]})")
+    warehouse_sales("CrossJoin({[Store].[USA].[WA]}, {[Time].[1997].[Q1], [Time].[1997].[Q2]})")
+    warehouse_sales("CrossJoin([Store].[USA].Children, {[Time].[1997].[Q2], [Time].[1997].[Q3]})")
+    warehouse_sales("{[Store].[USA].[WA]}")
+
+    assert_equal expected, warehouse_sales("[Store].[USA].Children")
+  end
 end

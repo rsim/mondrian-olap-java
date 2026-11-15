@@ -263,7 +263,8 @@ itself a synchronous `PeekCommand` through the same actor queue.
    (`FastBatchingCellReader#findResidentRollupCandidate`). Each kept column of
    the rolled-up segment gets the intersection of the source segments' value
    lists (`Util#intersect`; (fork PATCH) fixed for `compareTo` results other
-   than ±1, see fork-changes §1.8). Every candidate contains the requested
+   than ±1, and (fork PATCH) intersected with all earlier segments, not only
+   the first one, see fork-changes §1.8). Every candidate contains the requested
    value, so the intersection does too. A successful rollup is pushed back
    into the shared index via an inline actor command.
 3. **SQL** (`BatchLoader#loadFromSql`): the request joins (or creates) the
