@@ -292,7 +292,7 @@ describe "LookupCube" do
       )
     end
 
-    it "returns empty for members that are not in the other cube" do
+    it "ignores hierarchies that the other cube does not have" do
       # The Sales cube has no [Warehouse] dimension, and the Warehouse cube has no [Customers]
       # dimension, so SHARED_CONTEXT maps neither of them.
       expected = values(warehouse_query("[Measures].[Warehouse Sales]", rows: "{[Store].[USA]}")).flatten
