@@ -283,6 +283,14 @@ deltas.
   of a denied member or measure, and the property error message showed that
   a denied member exists. A member with partial access is substituted, so its
   value is the partial rollup.
+- `Util#intersect` treats any positive `compareTo` result as "greater".
+  Upstream tested for `== 1`, but `String#compareTo` returns the character
+  difference, so the `ArraySortedSet` path advanced the wrong side and lost
+  common values (`{WA}` ∩ `{CA, OR, WA}` was empty). `SegmentBuilder#rollup`
+  uses it for the kept columns of segments with different value lists, so
+  the rollup came out empty, the cell request stayed unsatisfied, and the
+  same rollup was proposed until the query failed with "Query required more
+  than 12 iterations".
 - `RolapProperty` marks internal properties as `dependsOnLevelValue`.
 - `QueryTiming` guards the ms/invocation average against division by zero.
 - Cancellation: `CancellationChecker#checkCancelOrTimeout` checks the

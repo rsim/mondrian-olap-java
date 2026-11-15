@@ -260,8 +260,12 @@ itself a synchronous `PeekCommand` through the same actor queue.
    `SegmentBuilder#rollup` — building a coarser `SegmentHeader`/`SegmentBody`
    by re-aggregating the finer bodies — happens later on the client thread,
    and only if all candidate bodies are actually still in cache
-   (`FastBatchingCellReader#findResidentRollupCandidate`). A successful rollup
-   is pushed back into the shared index via an inline actor command.
+   (`FastBatchingCellReader#findResidentRollupCandidate`). Each kept column of
+   the rolled-up segment gets the intersection of the source segments' value
+   lists (`Util#intersect`; (fork PATCH) fixed for `compareTo` results other
+   than ±1, see fork-changes §1.8). Every candidate contains the requested
+   value, so the intersection does too. A successful rollup is pushed back
+   into the shared index via an inline actor command.
 3. **SQL** (`BatchLoader#loadFromSql`): the request joins (or creates) the
    `Batch` for its `AggregationKey`.
 
