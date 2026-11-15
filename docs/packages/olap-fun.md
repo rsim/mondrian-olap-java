@@ -242,6 +242,8 @@ expression, given as a string, in another cube of the schema and returns
     `SumPlaceholderMember` adds their values, because an aggregation would
     count a repeated operand once and would not add distinct counts.
 
+  While a calculated member is expanded, its own hierarchy has the default
+  member unless its tuples set it.
   Calculated members of several hierarchies are mapped in the order of the
   `ABSOLUTE` solve order mode, so the member that expands first in the source
   cube sets the context last.

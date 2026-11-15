@@ -628,8 +628,14 @@ class LookupCubeContext {
             set.getType() instanceof SetType
                 ? (TupleList) evaluateCached(source, pair, member, set)
                 : evaluateSet(source, pair, set);
-        // An aggregated member sets the context of all hierarchies of its
-        // tuples, so all mapped hierarchies of the tuples are used.
+        // The calculated member's hierarchy has its default member while the
+        // tuples are aggregated, unless the tuples set it, as in the source
+        // cube. An aggregated member sets the context of all hierarchies of
+        // its tuples, so all mapped hierarchies of the tuples are used.
+        mapCalculatedMember(
+            source, pair, pairs,
+            source.root.defaultMembers[pair.source.getOrdinalInCube()],
+            depth + 1, mapped);
         mapped.addAll(Arrays.asList(mapTupleList(tupleList, pairs, pair)));
     }
 
