@@ -54,6 +54,7 @@ import mondrian.server.StatementImpl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -486,7 +487,7 @@ class LookupCubeContext {
         Set<Hierarchy> calculatedHierarchies = Collections.emptySet();
         if (calculatedPairs != null) {
             final List<Member> mapped = new ArrayList<Member>();
-            for (int i = 0; i < calculatedPairs.size(); i++) {
+            for (int i : orderByPrecedence(calculatedPairs, calculatedMembers)) {
                 mapCalculatedMember(
                     source, calculatedPairs.get(i), pairs,
                     calculatedMembers.get(i), 0, mapped);
@@ -513,6 +514,38 @@ class LookupCubeContext {
                 }
             }
         }
+    }
+
+    /**
+     * Returns the indexes of calculated members in the order in which their
+     * mapped members are set. In the source cube, the calculated member with
+     * the highest solve order, or with the lowest hierarchy ordinal for the
+     * same solve order, expands first and so overrides the context that the
+     * others set. Its mapped members are set last.
+     */
+    private static List<Integer> orderByPrecedence(
+        final List<HierarchyPair> calculatedPairs,
+        final List<Member> calculatedMembers)
+    {
+        final List<Integer> indexes = new ArrayList<Integer>();
+        for (int i = 0; i < calculatedMembers.size(); i++) {
+            indexes.add(i);
+        }
+        Collections.sort(indexes, new Comparator<Integer>() {
+            public int compare(Integer i1, Integer i2) {
+                final int solveOrder1 = calculatedMembers.get(i1).getSolveOrder();
+                final int solveOrder2 = calculatedMembers.get(i2).getSolveOrder();
+                if (solveOrder1 != solveOrder2) {
+                    return solveOrder1 < solveOrder2 ? -1 : 1;
+                }
+                final int ordinal1 =
+                    calculatedPairs.get(i1).source.getOrdinalInCube();
+                final int ordinal2 =
+                    calculatedPairs.get(i2).source.getOrdinalInCube();
+                return ordinal1 == ordinal2 ? 0 : ordinal1 > ordinal2 ? -1 : 1;
+            }
+        });
+        return indexes;
     }
 
     private static HierarchyPair findPair(

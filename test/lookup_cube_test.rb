@@ -369,6 +369,19 @@ describe "LookupCube" do
       )
     end
 
+    it "maps calculated members of several hierarchies in the order in which they expand" do
+      # Both calculated members return a member of the other one's hierarchy. The Store member expands
+      # first, because its hierarchy has the lower ordinal, so its Time member is the context.
+      with = "MEMBER [Store].[Q1] AS '[Time].[1997].[Q1]' MEMBER [Time].[California] AS '[Store].[USA].[CA]'"
+      expected = values(warehouse_query("[Measures].[Warehouse Sales]", rows: "{([Store].[Q1], [Time].[California])}",
+        with: with)).flatten
+      %w([Store],\ [Time] [Time],\ [Store]).each do |hierarchies|
+        actual = values(lookup_query(%{LookupCube("Warehouse", "[Measures].[Warehouse Sales]", #{hierarchies})},
+          rows: "{([Store].[Q1], [Time].[California])}", with: with)).flatten
+        assert_equal expected, actual, hierarchies
+      end
+    end
+
     it "ignores hierarchies that the other cube does not have" do
       # The Sales cube has no [Warehouse] dimension, and the Warehouse cube has no [Customers]
       # dimension, so SHARED_CONTEXT maps neither of them.
