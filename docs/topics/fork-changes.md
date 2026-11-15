@@ -339,7 +339,8 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
     `getSlicerEvaluator()`. `RolapSetEvaluator` and `RolapNamedSetEvaluator`
     use that method instead of `result.slicerEvaluator`, so sets of the
     target cube are evaluated in its own default context through the source
-    result's phase loop.
+    result's phase loop. `getParameterValue` uses it for parameter default
+    values too.
   - `CompoundSlicerRolapMember` is static and exposes `getTupleList()`, so
     mapped compound slicers can be re-created in the target cube.
 - **`RolapCubeHierarchy#lookupCubeMember(RolapMember)`** maps a shared

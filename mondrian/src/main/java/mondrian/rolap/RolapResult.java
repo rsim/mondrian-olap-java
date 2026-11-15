@@ -1696,7 +1696,8 @@ public class RolapResult extends ResultBase {
       }
       // Set value to a sentinel, so we can detect cyclic evaluation.
       slot.setCachedDefaultValue( CycleSentinel );
-      value = result.evaluateExp( slot.getDefaultValueCalc(), result.slicerEvaluator, null );
+      // PATCH: The default value of a parameter of a LookupCube expression is evaluated in the target cube.
+      value = result.evaluateExp( slot.getDefaultValueCalc(), getSlicerEvaluator(), null );
       if ( value == null ) {
         liftedValue = NullSentinel;
       } else {

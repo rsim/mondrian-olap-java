@@ -130,6 +130,14 @@ describe "LookupCube" do
       assert_in_delta total * 2, actual, 0.001
     end
 
+    it "evaluates parameter default values in the other cube" do
+      assert_equal values(warehouse_query("[Measures].[Default Measure]", rows: "{[Store].[All Stores]}",
+        with: "MEMBER [Measures].[Default Measure] AS '[Measures].DefaultMember.Name'")).flatten,
+        values(lookup_query(
+          'LookupCube("Warehouse", "Parameter(""Measure"", STRING, [Measures].CurrentMember.Name)")',
+          rows: "{[Store].[All Stores]}")).flatten
+    end
+
     it "evaluates named sets of the other cube" do
       assert_equal [5], values(lookup_query('LookupCube("Warehouse", "Count([Top Sellers])")',
         rows: "{[Store].[All Stores]}")).flatten
