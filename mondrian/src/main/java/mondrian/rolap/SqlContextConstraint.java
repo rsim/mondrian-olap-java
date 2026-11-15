@@ -91,6 +91,20 @@ public class SqlContextConstraint
             query.setBaseCubes(baseCubeList);
         }
 
+        // PATCH: LookupCube can return values for members that have no rows
+        // in the fact table of this cube, so joining the fact table would
+        // drop them. Non-empty members are then found by evaluating cells.
+        if (context.getQuery().usesLookupCube()) {
+            return false;
+        }
+        // PATCH: LookupCube maps the context to placeholder members that
+        // aggregate tuples, and to null members for members that are missing
+        // in the target cube. SQL cannot constrain on either of them without
+        // the slicer tuples, so the constraint would drop that context.
+        if (hasUnconstrainedMembers(context)) {
+            return false;
+        }
+
         if (SqlConstraintUtils.measuresConflictWithMembers(
                 context.getQuery().getMeasuresMembers(), context.getMembers()))
         {
@@ -116,6 +130,26 @@ public class SqlContextConstraint
             }
         }
         return true;
+    }
+
+    // PATCH: Whether the context has members that SQL cannot constrain on.
+    // Compound slicer placeholders wrap the null member, so they are checked
+    // first.
+    private static boolean hasUnconstrainedMembers(Evaluator context) {
+        final boolean hasSlicerTuples =
+            context instanceof RolapEvaluator
+            && ((RolapEvaluator) context).getSlicerTuples() != null;
+        final Member[] members = context.getMembers();
+        for (int i = 1; i < members.length; i++) {
+            final Member member = members[i];
+            if (member instanceof RolapResult.CompoundSlicerRolapMember
+                ? !hasSlicerTuples
+                : member.isNull())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

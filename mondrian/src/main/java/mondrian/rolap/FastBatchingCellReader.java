@@ -266,9 +266,8 @@ public class FastBatchingCellReader implements CellReader {
                     // index is informed that this header is there,
                     // so a LoadBatchCommand might still return
                     // it on the next iteration.
-                    if (cube.getStar() != null) {
-                        cacheMgr.remove(cube.getStar(), header);
-                    }
+                    // PATCH: Remove the header from the index of its star.
+                    removeHeader(header);
                     ++failureCount;
                     continue;
                 }
@@ -501,6 +500,23 @@ public class FastBatchingCellReader implements CellReader {
         return null;
     }
 
+    // PATCH: Remove the header from the index of its own star. LookupCube
+    // sends cell requests of another cube's star through this reader, and the
+    // index of this cube's star does not have their headers. The star is found
+    // by the cube of the header's measure, because the stars of cubes with a
+    // filtered fact table share the fact table alias.
+    private void removeHeader(SegmentHeader header) {
+        final RolapCube headerCube =
+            header.cubeName.equals(cube.getName())
+                ? cube
+                : cube.getSchema().lookupCube(header.cubeName);
+        final RolapStar star =
+            headerCube == null ? cube.getStar() : headerCube.getStar();
+        if (star != null) {
+            cacheMgr.remove(star, header);
+        }
+    }
+
     private SegmentBody loadSegmentFromCache(
         Map<SegmentHeader, SegmentBody> headerBodies,
         SegmentHeader header)
@@ -511,9 +527,8 @@ public class FastBatchingCellReader implements CellReader {
         }
         body = cacheMgr.compositeCache.get(header);
         if (body == null) {
-            if (cube.getStar() != null) {
-                cacheMgr.remove(cube.getStar(), header);
-            }
+            // PATCH: Remove the header from the index of its star.
+            removeHeader(header);
             return null;
         }
         headerBodies.put(header, body);
@@ -1650,6 +1665,12 @@ class BatchLoader {
             if (cubeClosureColumnBitKey == null) {
                 // Virtual cubes have a null bitkey. For now, punt; should do
                 // better.
+                return true;
+            }
+            // PATCH: LookupCube adds batches of other cubes to this reader.
+            // The closure columns of this cube do not apply to another star,
+            // so punt as for virtual cubes.
+            if (getStar() != cube.getStar()) {
                 return true;
             }
             final BitKey closureColumns =

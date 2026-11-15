@@ -604,11 +604,28 @@ public class CrossJoinFunDef extends FunDefBase {
       return null;
     }
 
+    // PATCH: The values of a calculated measure that calls LookupCube come from another cube, not from the stored
+    // measures of its expression, so the calculated measure itself is checked for data. A measure that refers to
+    // the crossjoin call is skipped, as its evaluation would evaluate the crossjoin again.
+    void addLookupCubeMeasure( Member calculatedMeasure, Set<Member> measureSet ) {
+      final Exp exp = calculatedMeasure.getExpression();
+      if ( !LookupCubeFunDef.containsLookupCube( exp ) ) {
+        return;
+      }
+      finder.found = false;
+      exp.accept( finder );
+      if ( !finder.found ) {
+        measureSet.add( calculatedMeasure );
+      }
+    }
+
     private void process( final Member member ) {
       if ( member.isMeasure() ) {
         if ( member.isCalculated() ) {
           if ( activeMeasures.add( member ) ) {
             Exp exp = member.getExpression();
+            // PATCH: Check a calculated measure that calls LookupCube.
+            addLookupCubeMeasure( member, queryMeasureSet );
             finder.found = false;
             exp.accept( finder );
             if ( !finder.found ) {
@@ -697,12 +714,16 @@ public class CrossJoinFunDef extends FunDefBase {
 
     final String memberSetKey = "MEMBER_SET-" + ctag;
     Set<Member> memberSet = Util.cast( (Set) query.getEvalCache( memberSetKey ) );
+
+    final String lookupCubeMeasureSetKey = "LOOKUP_CUBE_MEASURE_SET-" + ctag;
+    Set<Member> lookupCubeMeasureSet = Util.cast( (Set) query.getEvalCache( lookupCubeMeasureSetKey ) );
     // If not in query cache, then create and place into cache.
     // This information is used for each iteration so it makes
     // sense to create and cache it.
-    if ( measureSet == null || memberSet == null ) {
+    if ( measureSet == null || memberSet == null || lookupCubeMeasureSet == null ) {
       measureSet = new HashSet<Member>();
       memberSet = new HashSet<Member>();
+      lookupCubeMeasureSet = new HashSet<Member>();
       Set<Member> queryMeasureSet = query.getMeasuresMembers();
       MeasureVisitor measureVisitor = new MeasureVisitor( measureSet, call );
 
@@ -716,11 +737,19 @@ public class CrossJoinFunDef extends FunDefBase {
       for ( Member m : queryMeasureSet ) {
         if ( m.isCalculated() ) {
           Exp exp = m.getExpression();
+          // PATCH: Check a calculated measure that calls LookupCube.
+          measureVisitor.addLookupCubeMeasure( m, measureSet );
           exp.accept( measureVisitor );
           exp.accept( memVisitor );
         } else {
           measureSet.add( m );
         }
+      }
+      // PATCH: Check calculated measures that call LookupCube and that the query selects with a function, such as
+      // [Measures].AllMembers, because they are not among the measures of the query. They are checked in addition
+      // to the measure set, because an empty measure set checks the current measure.
+      for ( Member m : LookupCubeFunDef.getSelectedLookupCubeMeasures( query ) ) {
+        measureVisitor.addLookupCubeMeasure( m, lookupCubeMeasureSet );
       }
       Formula[] formula = query.getFormulas();
       if ( formula != null ) {
@@ -734,6 +763,7 @@ public class CrossJoinFunDef extends FunDefBase {
       }
       query.putEvalCache( measureSetKey, measureSet );
       query.putEvalCache( memberSetKey, memberSet );
+      query.putEvalCache( lookupCubeMeasureSetKey, lookupCubeMeasureSet );
     }
 
     final String allMemberListKey = "ALL_MEMBER_LIST-" + ctag;
@@ -884,8 +914,10 @@ public class CrossJoinFunDef extends FunDefBase {
         // Throws an exception in case of timeout is exceeded
         // see MONDRIAN-2425
         CancellationChecker.checkCancelOrTimeout( currentIteration++, execution );
+        // PATCH: Also check the calculated measures that call LookupCube and that the query selects with a function.
         if ( tupleContainsCalcs( cursor.current() ) || checkData( nonAllMembers, nonAllMembers.length - 1, measureSet,
-            evaluator ) ) {
+            evaluator ) || ( !lookupCubeMeasureSet.isEmpty() && checkData( nonAllMembers, nonAllMembers.length - 1,
+                lookupCubeMeasureSet, evaluator ) ) ) {
           result.addCurrent( cursor );
         }
       }

@@ -72,7 +72,8 @@ class RolapSetEvaluator
     private void ensureList() {
         if (list != null) {
             if (list == DUMMY_LIST) {
-                throw rrer.result.slicerEvaluator.newEvalException(
+                // PATCH: Use the root's slicer evaluator so that a LookupCube root evaluates sets in its own cube.
+                throw rrer.getSlicerEvaluator().newEvalException(
                     null,
                     "Illegal attempt to reference value of a set '"
                     + getExpression() + "' while evaluating itself");
@@ -88,10 +89,11 @@ class RolapSetEvaluator
             final Calc calc =
                 rrer.getCompiled(
                     exp, false, ResultStyle.ITERABLE);
+            // PATCH: Use the root's slicer evaluator so that a LookupCube root evaluates sets in its own cube.
             TupleIterable iterable =
                     (TupleIterable) rrer.result.evaluateExp(
                         calc,
-                        rrer.result.slicerEvaluator, null);
+                        rrer.getSlicerEvaluator(), null);
 
             // Axes can be in two forms: list or iterable. If iterable, we
             // need to materialize it, to ensure that all cell values are in

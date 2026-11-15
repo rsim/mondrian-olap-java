@@ -2109,6 +2109,9 @@ public class BuiltinFunTable extends FunTableImpl {
 
         builder.define(CastFunDef.Resolver);
 
+        // PATCH: LookupCube(<Cube Name>, <Expression String>[, ...])
+        builder.define(LookupCubeFunDef.Resolver);
+
         // UCase(<String Expression>)
         builder.define(
             new FunDefBase(

@@ -318,6 +318,53 @@ uses it to attribute evaluation time per calculated member (using
 `Evaluator` interface and implemented in `RolapEvaluator`).
 `NonEmptyCrossJoinFunDef` marks its own timing.
 
+### 1.10 `LookupCube` function
+
+`LookupCube(<Cube Name>, <Expression String>[, SHARED_CONTEXT | <Dimension
+or Hierarchy>, ...])` evaluates an MDX expression in another cube (see
+[packages/olap-fun.md](../packages/olap-fun.md#cross-cube-lookups-lookupcube-fork)).
+The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
+`LookupCubeEvaluatorRoot`. The `// PATCH:` changes to existing classes are:
+
+- **`BuiltinFunTable`** registers the resolver.
+- **`RolapEvaluator#evaluateInCube`** is the entry point. It also limits
+  nesting to 16 levels, which stops calculated members of two cubes that look
+  each other up.
+- **`RolapEvaluatorRoot`**:
+  - a protected constructor for a query other than the statement's query;
+  - the per-execution lookup contexts, owned by the source root;
+  - `clearResultCache`, which also clears the lookup roots.
+- **`RolapResult`**:
+  - `RolapResultEvaluatorRoot` gains a constructor for a lookup root and
+    `getSlicerEvaluator()`. `RolapSetEvaluator` and `RolapNamedSetEvaluator`
+    use that method instead of `result.slicerEvaluator`, so sets of the
+    target cube are evaluated in its own default context through the source
+    result's phase loop. `getParameterValue` uses it for parameter default
+    values too.
+  - `CompoundSlicerRolapMember` is static and exposes `getTupleList()`, so
+    mapped compound slicers can be re-created in the target cube.
+- **`RolapCubeHierarchy#lookupCubeMember(RolapMember)`** maps a shared
+  dimension member between cubes without SQL.
+- **`Query#usesLookupCube`** and **`SqlContextConstraint#isValidContext`**
+  disable native NON EMPTY constraints for queries that use `LookupCube`.
+  `Query#setUsesLookupCube` marks the target query of a lookup whose
+  expression calls `LookupCube` in its turn.
+  `Query#resolve` resets the cached flag, because formulas or axes can change.
+  `isValidContext` also refuses a context with a null member, or with a
+  compound slicer placeholder when the evaluator has no slicer tuples, as in
+  the target cube of a mapped `LookupCube` context.
+- **`CrossJoinFunDef#nonEmptyList`**, the NON EMPTY crossjoin optimizer, also
+  checks calculated measures that call `LookupCube` for data, because their
+  values do not come from the stored measures of their expressions. It also
+  checks the calculated measures that call `LookupCube` and that the query
+  selects with a function, such as `[Measures].AllMembers`.
+- **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
+  of another star.
+- **`FastBatchingCellReader#removeHeader`** removes a segment header whose
+  body is gone from the index of the header's own star, not of the reader
+  cube's star. It finds the star by the cube of the header's measure, because
+  the stars of cubes with a filtered fact table share the fact table alias.
+
 ## 2. Concurrency hardening
 
 Changes that replace upstream's coarse synchronization so many connections /

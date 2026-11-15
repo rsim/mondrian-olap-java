@@ -1096,6 +1096,47 @@ public class RolapEvaluator implements Evaluator {
     root.clearResultCache( clearValidResult );
   }
 
+  // PATCH: LookupCube support.
+  /**
+   * Maximum nesting of LookupCube calls. Deeper nesting usually means that calculated members of two cubes look each
+   * other up.
+   */
+  private static final int MAX_LOOKUP_CUBE_DEPTH = 16;
+
+  /**
+   * Evaluates an MDX expression in another cube within the current query execution.
+   *
+   * <p>
+   * Cells of the other cube are requested through the cell reader of this evaluator, so they are loaded in the same
+   * batches as the cells of the current query.
+   *
+   * @param cubeName
+   *          Name of the cube in which the expression is evaluated
+   * @param expression
+   *          MDX expression
+   * @param mapAll
+   *          Whether to map the context of all hierarchies that exist in both cubes
+   * @param hierarchies
+   *          Hierarchies whose context is mapped, or null
+   * @param dimensions
+   *          Dimensions whose hierarchies' context is mapped, or null
+   * @return Value of the expression
+   */
+  public final Object evaluateInCube( String cubeName, String expression, boolean mapAll,
+      List<Hierarchy> hierarchies, List<Dimension> dimensions ) {
+    final LookupCubeContext context = root.getLookupCubeContext( cubeName );
+    final int depth = root.enterLookupCube();
+    try {
+      if ( depth > MAX_LOOKUP_CUBE_DEPTH ) {
+        throw LookupCubeContext.error( "LookupCube calls are nested more than " + MAX_LOOKUP_CUBE_DEPTH
+            + " levels deep; calculated members probably look each other up in a cycle" );
+      }
+      return context.evaluate( this, expression, mapAll, hierarchies, dimensions );
+    } finally {
+      root.exitLookupCube();
+    }
+  }
+
   public final boolean isNonEmpty() {
     return nonEmpty;
   }

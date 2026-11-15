@@ -12,6 +12,7 @@ package mondrian.olap;
 
 import mondrian.calc.*;
 import mondrian.mdx.*;
+import mondrian.olap.fun.LookupCubeFunDef;
 import mondrian.olap.fun.ParameterFunDef;
 import mondrian.olap.type.*;
 import mondrian.resource.MondrianResource;
@@ -382,6 +383,8 @@ public class Query extends QueryPart {
    * modified the query's expression tree in any way.
    */
   public void resolve() {
+    // PATCH: Formulas or axes may have changed, so LookupCube calls are looked up again.
+    usesLookupCube = null;
     // Before commencing validation, create all calculated members
     // and calculated sets
     createFormulaElements();
@@ -1177,6 +1180,23 @@ public class Query extends QueryPart {
    */
   public Set<Member> getMeasuresMembers() {
     return Collections.unmodifiableSet( measuresMembers );
+  }
+
+  // PATCH: Whether the query uses LookupCube. Native evaluation checks it, because members can have LookupCube values
+  // where the fact table of the query cube has no rows. Computed on first use.
+  private Boolean usesLookupCube;
+
+  public boolean usesLookupCube() {
+    if ( usesLookupCube == null ) {
+      usesLookupCube = LookupCubeFunDef.usesLookupCube( this );
+    }
+    return usesLookupCube;
+  }
+
+  // PATCH: Records that an expression which is compiled for this query, outside its formulas and axes, uses
+  // LookupCube.
+  public void setUsesLookupCube() {
+    usesLookupCube = Boolean.TRUE;
   }
 
   /**

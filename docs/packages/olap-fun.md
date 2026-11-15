@@ -206,6 +206,88 @@ introspection), `MemberExtractingVisitor` / `ResolvedFunCallFinder` (AST
 visitors used by `ValidMeasure` and native analysis), and
 `MondrianEvaluationException` (what `FunUtil#newEvalException` throws).
 
+## Cross-cube lookups: `LookupCube` (fork)
+
+`LookupCubeFunDef` **(fork addition)** implements `LookupCube(<Cube Name>,
+<Expression String>[, SHARED_CONTEXT | <Dimension or Hierarchy>, ...])`, after the SQL
+Server Analysis Services function of the same name. It evaluates an MDX
+expression, given as a string, in another cube of the schema and returns
+`Category.Value`.
+
+- **Two arguments: SSAS semantics.** The expression is evaluated in the
+  default context of the target cube, so callers build coordinates into the
+  string (`"(" + [Store].CurrentMember.UniqueName + ", [Measures].[X])"`).
+- **Context mapping (fork extension).** `SHARED_CONTEXT` maps the current
+  members of all hierarchies that exist in both cubes, matched by unique name. Dimension
+  arguments map all of their hierarchies, and hierarchy arguments map only
+  those hierarchies. Hierarchy arguments are evaluated per call, so
+  `[Time].CurrentMember.Hierarchy` or a UDF that returns a hierarchy works.
+  Mapping covers the following member kinds:
+  - stored members: for a shared dimension through
+    `RolapCubeHierarchy#lookupCubeMember`, with no SQL; otherwise by unique
+    name;
+  - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
+    re-created in the target cube over the mapped tuples. The target
+    placeholders are calculated members, because the target evaluator has no
+    slicer, so the NON EMPTY crossjoin optimizer keeps them in the context
+    instead of replacing them with All members. They are set last
+    and not on hierarchies that a mapped calculated member sets, because the
+    compound slicer has the lowest solve order;
+  - calculated members that aggregate members or sets: `Aggregate(<set>)`
+    or a member expression. A member expression that returns a member of
+    another hierarchy maps that member, and the calculated member's own
+    hierarchy gets its default member;
+  - calculated members that add such operands, such as `[Time].[2024] +
+    [Time].[2025]`: each operand is mapped separately and a
+    `SumPlaceholderMember` adds their values, because an aggregation would
+    count a repeated operand once and would not add distinct counts.
+
+  While a calculated member is expanded, its own hierarchy has the default
+  member unless its tuples set it.
+  Calculated members of several hierarchies are mapped in the order of the
+  `ABSOLUTE` solve order mode, so the member that expands first in the source
+  cube sets the context last.
+
+  Any other calculated member on a mapped hierarchy fails the query, also a
+  calculated member inside the set of an aggregated member. An aggregated
+  member is mapped to its distinct target tuples, so a tuple that its set
+  repeats counts once, unlike in the source cube. Tuples only of hierarchies
+  that are not mapped do not constrain the target cube.
+- **`SHARED_CONTEXT` is a reserved word**, like the flags of `Descendants`.
+  Reserved words apply to every unbracketed single-segment identifier of a
+  query, which is why the flag has a two-word name that hardly collides with
+  dimension or set names.
+- **Machinery.** The calc calls `RolapEvaluator#evaluateInCube`. That method
+  gets a `mondrian.rolap.LookupCubeContext` for the target cube, which is
+  created once per execution. The context holds:
+  - a target `Query`, with its own statement;
+  - a `LookupCubeEvaluatorRoot`;
+  - an LRU cache of compiled expressions, so each distinct string is parsed
+    once;
+  - memoized member mappings.
+
+  The target evaluator uses the caller's cell reader, so target cells are
+  batched with the source query's cells (see
+  [topics/cell-batching.md](../topics/cell-batching.md)).
+- **Native evaluation guard.** A query that uses `LookupCube` disables native
+  NON EMPTY constraints (`SqlContextConstraint#isValidContext` checks
+  `Query#usesLookupCube`), because joining the source fact table would drop
+  members that have values only in the target cube.
+  For the same reason, the NON EMPTY crossjoin optimizer
+  (`CrossJoinFunDef#nonEmptyList`) checks calculated measures that call
+  `LookupCube` for data, not only the stored measures of their expressions.
+  A query that selects measures with a function, such as
+  `[Measures].AllMembers`, uses `LookupCube` when a calculated measure of
+  its cube calls it, and the optimizer checks such measures too
+  (`LookupCubeFunDef#getSelectedLookupCubeMeasures`). `[Measures].CurrentMember`
+  does not select measures.
+  A target expression that calls `LookupCube` in its turn marks the target
+  query with `Query#setUsesLookupCube`, because the target query has no
+  formulas or axes that would show it.
+  Inside the target cube, native evaluation also stops when the mapped context
+  has placeholder members or null members, because SQL cannot constrain on
+  them and would ignore that context.
+
 ## Native SQL evaluation hook
 
 `CrossJoinFunDef`, `NonEmptyCrossJoinFunDef`, `FilterFunDef`,

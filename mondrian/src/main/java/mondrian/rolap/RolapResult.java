@@ -76,6 +76,7 @@ import mondrian.rolap.agg.AggregationManager;
 import mondrian.rolap.agg.CellRequestQuantumExceededException;
 import mondrian.server.Execution;
 import mondrian.server.Locus;
+import mondrian.server.Statement;
 import mondrian.spi.CellFormatter;
 import mondrian.util.CancellationChecker;
 import mondrian.util.Format;
@@ -1597,6 +1598,18 @@ public class RolapResult extends ResultBase {
       this.result = result;
     }
 
+    // PATCH: Root for another query (a LookupCube target cube) that runs within the execution of the result.
+    protected RolapResultEvaluatorRoot( RolapResult result, Statement statement, Query query, Execution execution ) {
+      super( statement, query, execution );
+      this.result = result;
+    }
+
+    // PATCH: Evaluator in whose context sets are evaluated. A LookupCube root overrides it with its own cube's
+    // default context.
+    protected RolapEvaluator getSlicerEvaluator() {
+      return result.slicerEvaluator;
+    }
+
     protected Evaluator.NamedSetEvaluator evaluateNamedSet( final NamedSet namedSet, boolean create ) {
       final String name = namedSet.getNameUniqueWithinQuery();
       RolapNamedSetEvaluator value;
@@ -1683,7 +1696,8 @@ public class RolapResult extends ResultBase {
       }
       // Set value to a sentinel, so we can detect cyclic evaluation.
       slot.setCachedDefaultValue( CycleSentinel );
-      value = result.evaluateExp( slot.getDefaultValueCalc(), result.slicerEvaluator, null );
+      // PATCH: The default value of a parameter of a LookupCube expression is evaluated in the target cube.
+      value = result.evaluateExp( slot.getDefaultValueCalc(), getSlicerEvaluator(), null );
       if ( value == null ) {
         liftedValue = NullSentinel;
       } else {
@@ -2160,7 +2174,8 @@ public class RolapResult extends ResultBase {
    * cases where calculated members elsewhere in the query can override the context of the slicer members. See
    * MONDRIAN-1226.
    */
-  public class CompoundSlicerRolapMember extends DelegatingRolapMember implements RolapMeasure {
+  // PATCH: Static so that LookupCube can create placeholders for mapped compound slicers in a target cube.
+  public static class CompoundSlicerRolapMember extends DelegatingRolapMember implements RolapMeasure {
     private final Calc calc;
     private final ValueFormatter valueFormatter;
     private final TupleList tupleList;
@@ -2231,6 +2246,11 @@ public class RolapResult extends ResultBase {
 
     public ValueFormatter getFormatter() {
       return valueFormatter;
+    }
+
+    // PATCH: Expose the slicer tuples so that LookupCube can map them to a target cube.
+    public TupleList getTupleList() {
+      return tupleList;
     }
   }
 }
