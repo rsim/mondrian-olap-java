@@ -502,13 +502,16 @@ public class FastBatchingCellReader implements CellReader {
 
     // PATCH: Remove the header from the index of its own star. LookupCube
     // sends cell requests of another cube's star through this reader, and the
-    // index of this cube's star does not have their headers.
+    // index of this cube's star does not have their headers. The star is found
+    // by the cube of the header's measure, because the stars of cubes with a
+    // filtered fact table share the fact table alias.
     private void removeHeader(SegmentHeader header) {
-        RolapStar star =
-            cube.getSchema().getStar(header.rolapStarFactTableName);
-        if (star == null) {
-            star = cube.getStar();
-        }
+        final RolapCube headerCube =
+            header.cubeName.equals(cube.getName())
+                ? cube
+                : cube.getSchema().lookupCube(header.cubeName);
+        final RolapStar star =
+            headerCube == null ? cube.getStar() : headerCube.getStar();
         if (star != null) {
             cacheMgr.remove(star, header);
         }

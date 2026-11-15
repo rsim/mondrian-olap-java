@@ -359,7 +359,8 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   of another star.
 - **`FastBatchingCellReader#removeHeader`** removes a segment header whose
   body is gone from the index of the header's own star, not of the reader
-  cube's star.
+  cube's star. It finds the star by the cube of the header's measure, because
+  the stars of cubes with a filtered fact table share the fact table alias.
 
 ## 2. Concurrency hardening
 
