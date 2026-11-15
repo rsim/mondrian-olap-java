@@ -266,9 +266,7 @@ public class FastBatchingCellReader implements CellReader {
                     // index is informed that this header is there,
                     // so a LoadBatchCommand might still return
                     // it on the next iteration.
-                    if (cube.getStar() != null) {
-                        cacheMgr.remove(cube.getStar(), header);
-                    }
+                    removeHeader(header);
                     ++failureCount;
                     continue;
                 }
@@ -501,6 +499,20 @@ public class FastBatchingCellReader implements CellReader {
         return null;
     }
 
+    // PATCH: Remove the header from the index of its own star. LookupCube
+    // sends cell requests of another cube's star through this reader, and the
+    // index of this cube's star does not have their headers.
+    private void removeHeader(SegmentHeader header) {
+        RolapStar star =
+            cube.getSchema().getStar(header.rolapStarFactTableName);
+        if (star == null) {
+            star = cube.getStar();
+        }
+        if (star != null) {
+            cacheMgr.remove(star, header);
+        }
+    }
+
     private SegmentBody loadSegmentFromCache(
         Map<SegmentHeader, SegmentBody> headerBodies,
         SegmentHeader header)
@@ -511,9 +523,7 @@ public class FastBatchingCellReader implements CellReader {
         }
         body = cacheMgr.compositeCache.get(header);
         if (body == null) {
-            if (cube.getStar() != null) {
-                cacheMgr.remove(cube.getStar(), header);
-            }
+            removeHeader(header);
             return null;
         }
         headerBodies.put(header, body);

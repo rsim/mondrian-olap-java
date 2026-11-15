@@ -351,6 +351,9 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   the target cube of a mapped `LookupCube` context.
 - **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
   of another star.
+- **`FastBatchingCellReader#removeHeader`** removes a segment header whose
+  body is gone from the index of the header's own star, not of the reader
+  cube's star.
 
 ## 2. Concurrency hardening
 

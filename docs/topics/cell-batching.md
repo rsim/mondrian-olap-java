@@ -94,6 +94,14 @@ the same `valueNotReadyException` sentinel, and loaded in the same phase. Like
 the base cubes of a virtual cube, the batches simply have a different
 `RolapStar`. `Batch#haveSameClosureColumns` punts for batches of another star,
 because the reader cube's closure-column bit key does not apply to them.
+When a cached segment body is gone, the reader removes its header from the
+index of the header's own star, so that the next round trip loads the cells
+with SQL.
+
+An execution clears the thread-local segments (`RolapStar.Bar`) only of the
+stars of its own cube. `LookupCubeContext` clears the target cube's segments
+when it is created, otherwise a query executor thread would read values from
+before a cache flush.
 
 ## Anatomy of a CellRequest
 
