@@ -638,6 +638,12 @@ describe "LookupCube" do
         crossjoin_product_names("[Measures].[Units Shipped], [Measures].[Sales Units]").sort
     end
 
+    it "keeps them in NON EMPTY crossjoin rows of measures that a function selects" do
+      sales_products = product_names("Sales", "Unit Sales")
+      actual = crossjoin_product_names("AddCalculatedMembers([Measures].Members)")
+      assert_empty sales_products - actual
+    end
+
     it "keeps them in a NON EMPTY crossjoin of an expression that the other cube evaluates" do
       # The Sales Units measure of the Inventory cube looks up the Sales cube in its turn.
       formula = "Count(Filter(NonEmptyCrossJoin([Product].[Product Name].Members, {[Store].[USA]}), " \

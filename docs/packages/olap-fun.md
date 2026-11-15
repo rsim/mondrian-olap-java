@@ -264,6 +264,11 @@ expression, given as a string, in another cube of the schema and returns
   For the same reason, the NON EMPTY crossjoin optimizer
   (`CrossJoinFunDef#nonEmptyList`) checks calculated measures that call
   `LookupCube` for data, not only the stored measures of their expressions.
+  A query that selects measures with a function, such as
+  `[Measures].AllMembers`, uses `LookupCube` when a calculated measure of
+  its cube calls it, and the optimizer checks such measures too
+  (`LookupCubeFunDef#getSelectedLookupCubeMeasures`). `[Measures].CurrentMember`
+  does not select measures.
   A target expression that calls `LookupCube` in its turn marks the target
   query with `Query#setUsesLookupCube`, because the target query has no
   formulas or axes that would show it.

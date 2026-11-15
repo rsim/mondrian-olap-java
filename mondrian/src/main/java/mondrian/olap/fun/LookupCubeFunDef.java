@@ -34,9 +34,14 @@ import mondrian.olap.Query;
 import mondrian.olap.QueryAxis;
 import mondrian.olap.Syntax;
 import mondrian.olap.Validator;
+import mondrian.olap.type.MemberType;
+import mondrian.olap.type.SetType;
+import mondrian.olap.type.TupleType;
+import mondrian.olap.type.Type;
 import mondrian.rolap.RolapEvaluator;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -119,6 +124,27 @@ public class LookupCubeFunDef extends FunDefBase {
      * @return Whether the query uses LookupCube
      */
     public static boolean usesLookupCube(Query query) {
+        final LookupCubeFinder finder = findInQuery(query);
+        return finder.found
+            || (finder.selectsMeasures && !lookupCubeMeasures(query).isEmpty());
+    }
+
+    /**
+     * Returns the calculated measures that call LookupCube and that a query
+     * can select with a function, such as {@code [Measures].AllMembers}.
+     * Such measures are not among the measures that the query refers to.
+     *
+     * @param query Query
+     * @return Calculated measures, or an empty list if the query selects no
+     * measures with a function
+     */
+    public static List<Member> getSelectedLookupCubeMeasures(Query query) {
+        return findInQuery(query).selectsMeasures
+            ? lookupCubeMeasures(query)
+            : Collections.<Member>emptyList();
+    }
+
+    private static LookupCubeFinder findInQuery(Query query) {
         final LookupCubeFinder finder = new LookupCubeFinder();
         for (Formula formula : query.getFormulas()) {
             finder.visitExp(formula.getExpression());
@@ -129,7 +155,24 @@ public class LookupCubeFunDef extends FunDefBase {
         if (query.getSlicerAxis() != null) {
             finder.visitExp(query.getSlicerAxis().getSet());
         }
-        return finder.found;
+        return finder;
+    }
+
+    private static List<Member> lookupCubeMeasures(Query query) {
+        final List<Member> measures = new ArrayList<Member>();
+        for (Dimension dimension : query.getCube().getDimensions()) {
+            if (!dimension.isMeasures()) {
+                continue;
+            }
+            for (Member member : query.getSchemaReader(false)
+                .getCalculatedMembers(dimension.getHierarchies()[0]))
+            {
+                if (containsLookupCube(member.getExpression())) {
+                    measures.add(member);
+                }
+            }
+        }
+        return measures;
     }
 
     /**
@@ -218,6 +261,7 @@ public class LookupCubeFunDef extends FunDefBase {
     private static class LookupCubeFinder extends MdxVisitorImpl {
         private final Set<Object> visited = new HashSet<Object>();
         private boolean found;
+        private boolean selectsMeasures;
 
         void visitExp(Exp exp) {
             if (!found && exp != null) {
@@ -237,8 +281,49 @@ public class LookupCubeFunDef extends FunDefBase {
             if (call.getFunDef() instanceof LookupCubeFunDef) {
                 found = true;
                 turnOffVisitChildren();
+            } else if (isMeasuresSelection(call)) {
+                selectsMeasures = true;
             }
             return null;
+        }
+
+        /**
+         * Returns whether a call returns measures that its arguments do not
+         * name, such as {@code [Measures].AllMembers}.
+         * {@code [Measures].CurrentMember} returns the measure that the axes
+         * select, so it does not select measures.
+         */
+        private static boolean isMeasuresSelection(ResolvedFunCall call) {
+            if (!returnsMeasures(call.getType())
+                || call.getFunName().equalsIgnoreCase("CurrentMember"))
+            {
+                return false;
+            }
+            for (Exp arg : call.getArgs()) {
+                if (returnsMeasures(arg.getType())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static boolean returnsMeasures(Type type) {
+            if (type instanceof SetType) {
+                return returnsMeasures(((SetType) type).getElementType());
+            }
+            if (type instanceof TupleType) {
+                for (Type elementType : ((TupleType) type).elementTypes) {
+                    if (returnsMeasures(elementType)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (!(type instanceof MemberType)) {
+                return false;
+            }
+            final Dimension dimension = type.getDimension();
+            return dimension != null && dimension.isMeasures();
         }
 
         public Object visit(MemberExpr memberExpr) {

@@ -355,7 +355,9 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   the target cube of a mapped `LookupCube` context.
 - **`CrossJoinFunDef#nonEmptyList`**, the NON EMPTY crossjoin optimizer, also
   checks calculated measures that call `LookupCube` for data, because their
-  values do not come from the stored measures of their expressions.
+  values do not come from the stored measures of their expressions. It also
+  checks the calculated measures that call `LookupCube` and that the query
+  selects with a function, such as `[Measures].AllMembers`.
 - **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
   of another star.
 - **`FastBatchingCellReader#removeHeader`** removes a segment header whose
