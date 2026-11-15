@@ -13,7 +13,6 @@ package mondrian.rolap;
 import mondrian.mdx.MemberExpr;
 import mondrian.mdx.ResolvedFunCall;
 import mondrian.olap.*;
-import mondrian.olap.fun.LookupCubeFunDef;
 import mondrian.rolap.RestrictedMemberReader.MultiCardinalityDefaultMember;
 import mondrian.rolap.RolapHierarchy.LimitedRollupMember;
 import mondrian.rolap.aggmatcher.AggStar;
