@@ -267,6 +267,18 @@ describe "LookupCube" do
       )
     end
 
+    it "maps calculated members that aggregate empty sets of different hierarchies" do
+      result = values(lookup_query(
+        'LookupCube("Warehouse", "([Time].[1997], [Measures].[Warehouse Sales])", SHARED_CONTEXT)',
+        columns: "[Measures].[Lookup], [Measures].[Store Lookup]",
+        rows: "{([Time].[None], [Store].[None])}",
+        with: "MEMBER [Time].[None] AS 'Aggregate({})' MEMBER [Store].[None] AS 'Aggregate({})' " \
+          "MEMBER [Measures].[Store Lookup] AS " \
+          "'LookupCube(\"Warehouse\", \"([Store].[USA], [Measures].[Warehouse Sales])\", SHARED_CONTEXT)'"
+      ))
+      assert_equal [[nil, nil]], result
+    end
+
     it "maps calculated members that aggregate tuples of several hierarchies" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',

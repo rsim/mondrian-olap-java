@@ -677,6 +677,22 @@ class LookupCubeContext {
         List<HierarchyPair> pairs,
         HierarchyPair ownerPair)
     {
+        // Empty lists of different calculated members can be one shared
+        // instance, and their mapping depends on the owner hierarchy.
+        final Member[] members =
+            tupleList.isEmpty()
+                ? mapTupleList(tupleList, pairs, ownerPair)
+                : getMappedTupleList(tupleList, pairs, ownerPair);
+        for (Member member : members) {
+            target.setContext(member);
+        }
+    }
+
+    private Member[] getMappedTupleList(
+        List<List<Member>> tupleList,
+        List<HierarchyPair> pairs,
+        HierarchyPair ownerPair)
+    {
         Map<List<HierarchyPair>, Member[]> mappedByPairs =
             mappedTupleLists.get(tupleList);
         if (mappedByPairs == null) {
@@ -691,9 +707,7 @@ class LookupCubeContext {
             members = mapTupleList(tupleList, pairs, ownerPair);
             mappedByPairs.put(pairs, members);
         }
-        for (Member member : members) {
-            target.setContext(member);
-        }
+        return members;
     }
 
     private Member[] mapTupleList(
