@@ -238,6 +238,16 @@ describe "LookupCube" do
       )
     end
 
+    it "maps several calculated members that aggregate sets together with a compound slicer" do
+      assert_lookup_equals_warehouse(
+        'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',
+        rows: "{[Time].[H1], [Time].[H2]}",
+        where: "{[Store].[USA].[CA], [Store].[USA].[OR]}",
+        with: "MEMBER [Time].[H1] AS 'Aggregate({[Time].[1997].[Q1], [Time].[1997].[Q2]})' " \
+          "MEMBER [Time].[H2] AS 'Aggregate({[Time].[1997].[Q3], [Time].[1997].[Q4]})'"
+      )
+    end
+
     it "maps calculated members that aggregate tuples of several hierarchies" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',

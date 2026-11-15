@@ -30,6 +30,7 @@ import mondrian.olap.Formula;
 import mondrian.olap.Hierarchy;
 import mondrian.olap.Member;
 import mondrian.olap.MondrianException;
+import mondrian.olap.OlapElement;
 import mondrian.olap.Parameter;
 import mondrian.olap.Query;
 import mondrian.olap.QueryAxis;
@@ -760,10 +761,9 @@ class LookupCubeContext {
                 new ExpCacheDescriptor(exp, aggregateCalc, workEvaluator));
         for (int i = 0; i < members.length; i++) {
             members[i] =
-                new RolapResult.CompoundSlicerRolapMember(
+                new PlaceholderMember(
                     (RolapMember) hierarchies.get(i).getNullMember(),
                     calc,
-                    null,
                     tupleList);
             placeholderSet.add(members[i]);
         }
@@ -831,6 +831,37 @@ class LookupCubeContext {
             + pair.source.getUniqueName()
             + "' to cube '" + targetCube.getName()
             + "'. Only members that aggregate members or sets are supported.");
+    }
+
+    /**
+     * Placeholder member that aggregates mapped tuples.
+     *
+     * <p>All placeholders of a hierarchy wrap its null member, so they have the
+     * same unique name. They are equal only to themselves, otherwise the
+     * expression cache would return the value of one placeholder for another.
+     */
+    private static class PlaceholderMember
+        extends RolapResult.CompoundSlicerRolapMember
+    {
+        PlaceholderMember(
+            RolapMember nullMember,
+            Calc calc,
+            TupleList tupleList)
+        {
+            super(nullMember, calc, null, tupleList);
+        }
+
+        public boolean equals(Object o) {
+            return o == this;
+        }
+
+        public boolean equals(OlapElement o) {
+            return o == this;
+        }
+
+        public int hashCode() {
+            return System.identityHashCode(this);
+        }
     }
 
     /**
