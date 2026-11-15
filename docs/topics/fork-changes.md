@@ -346,6 +346,9 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   dimension member between cubes without SQL.
 - **`Query#usesLookupCube`** and **`SqlContextConstraint#isValidContext`**
   disable native NON EMPTY constraints for queries that use `LookupCube`.
+  `isValidContext` also refuses a context with a null member, or with a
+  compound slicer placeholder when the evaluator has no slicer tuples, as in
+  the target cube of a mapped `LookupCube` context.
 - **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
   of another star.
 

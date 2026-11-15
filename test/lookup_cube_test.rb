@@ -222,6 +222,20 @@ describe "LookupCube" do
       assert_equal expected, actual
     end
 
+    it "maps compound slicers to sets that the other cube filters" do
+      formula = "Count(Filter([Customers].[Name].Members, [Measures].[Unit Sales] > 0))"
+      where = "{[Time].[1997].[Q1].[1], [Time].[1997].[Q1].[2]}"
+      expected = values(<<~MDX)
+        WITH MEMBER [Measures].[Customers] AS '#{formula}'
+        SELECT {[Measures].[Customers]} ON COLUMNS FROM [Sales] WHERE #{where}
+      MDX
+      actual = values(<<~MDX)
+        WITH MEMBER [Measures].[Customers] AS 'LookupCube("Sales", "#{formula}", [Time])'
+        SELECT {[Measures].[Customers]} ON COLUMNS FROM [Warehouse] WHERE #{where}
+      MDX
+      assert_equal expected, actual
+    end
+
     it "maps compound slicers to dimensions that are listed" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", [Time], [Store])',

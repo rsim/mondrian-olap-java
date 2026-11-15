@@ -252,6 +252,9 @@ expression, given as a string, in another cube of the schema and returns
   NON EMPTY constraints (`SqlContextConstraint#isValidContext` checks
   `Query#usesLookupCube`), because joining the source fact table would drop
   members that have values only in the target cube.
+  Inside the target cube, native evaluation also stops when the mapped context
+  has placeholder members or null members, because SQL cannot constrain on
+  them and would ignore that context.
 
 ## Native SQL evaluation hook
 
