@@ -164,7 +164,8 @@ public class LookupCubeFunDef extends FunDefBase {
             if (!dimension.isMeasures()) {
                 continue;
             }
-            for (Member member : query.getSchemaReader(false)
+            // Only the measures that the role can select are checked.
+            for (Member member : query.getSchemaReader(true)
                 .getCalculatedMembers(dimension.getHierarchies()[0]))
             {
                 if (containsLookupCube(member.getExpression())) {

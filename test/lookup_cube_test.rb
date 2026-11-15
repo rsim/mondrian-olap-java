@@ -606,12 +606,25 @@ describe "LookupCube" do
             end
           end
         end
+        role "Inventory only" do
+          schema_grant access: "none" do
+            cube_grant cube: "Inventory", access: "all" do
+              hierarchy_grant hierarchy: "[Measures]", access: "custom" do
+                member_grant member: "[Measures].[Units Shipped]", access: "all"
+              end
+            end
+          end
+        end
       end
       @only_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
     end
 
     after(:all) do
       @only_olap&.close
+    end
+
+    after do
+      @only_olap.role_name = nil
     end
 
     def product_names(cube_name, measure)
@@ -650,6 +663,12 @@ describe "LookupCube" do
       actual = crossjoin_product_names("AddCalculatedMembers([Measures].Members)",
         with: %q{MEMBER [Store].[Lookup] AS 'LookupCube("Sales", "[Measures].[Unit Sales]")'})
       assert_empty sales_products - actual
+    end
+
+    it "does not check measures that the role cannot select" do
+      @only_olap.role_name = "Inventory only"
+      inventory_products = product_names("Inventory", "Units Shipped")
+      assert_equal inventory_products.sort, crossjoin_product_names("AddCalculatedMembers([Measures].Members)").sort
     end
 
     it "keeps them in a NON EMPTY crossjoin of an expression that the other cube evaluates" do
