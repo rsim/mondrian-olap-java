@@ -333,6 +333,14 @@ describe "LookupCube" do
       )
     end
 
+    it "maps calculated members that return a member of another hierarchy" do
+      assert_lookup_equals_warehouse(
+        'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',
+        rows: "CrossJoin({[Time].[Beer]}, [Store].[USA].Children)",
+        with: "MEMBER [Time].[Beer] AS '[Product].[Drink].[Alcoholic Beverages].[Beer and Wine].[Beer]'"
+      )
+    end
+
     it "ignores hierarchies that the other cube does not have" do
       # The Sales cube has no [Warehouse] dimension, and the Warehouse cube has no [Customers]
       # dimension, so SHARED_CONTEXT maps neither of them.

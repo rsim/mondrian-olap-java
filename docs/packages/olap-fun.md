@@ -229,7 +229,9 @@ expression, given as a string, in another cube of the schema and returns
   - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
     re-created in the target cube over the mapped tuples;
   - calculated members that aggregate members or sets: `Aggregate(<set>)`
-    or a member expression;
+    or a member expression. A member expression that returns a member of
+    another hierarchy maps that member, and the calculated member's own
+    hierarchy gets its default member;
   - calculated members that add such operands, such as `[Time].[2024] +
     [Time].[2025]`: each operand is mapped separately and a
     `SumPlaceholderMember` adds their values, because an aggregation would

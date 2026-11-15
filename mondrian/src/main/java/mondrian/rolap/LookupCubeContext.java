@@ -500,6 +500,18 @@ class LookupCubeContext {
         }
     }
 
+    private static HierarchyPair findPair(
+        List<HierarchyPair> pairs,
+        Hierarchy sourceHierarchy)
+    {
+        for (HierarchyPair pair : pairs) {
+            if (pair.source.equals(sourceHierarchy)) {
+                return pair;
+            }
+        }
+        return null;
+    }
+
     private static boolean isMappedDirectly(Member member) {
         return member.isAll()
             || !member.isCalculated()
@@ -527,8 +539,22 @@ class LookupCubeContext {
                 (Member) evaluateCached(source, pair, member, expression);
             if (result == null || result.isNull()) {
                 target.setContext(pair.target.getNullMember());
-            } else {
+            } else if (result.getHierarchy().equals(pair.source)) {
                 applyMember(source, target, pair, pairs, result, depth + 1);
+            } else {
+                // A member of another hierarchy is evaluated with the default
+                // member of the calculated member's hierarchy, as in the
+                // source cube.
+                applyMember(
+                    source, target, pair, pairs,
+                    source.root.defaultMembers[pair.source.getOrdinalInCube()],
+                    depth + 1);
+                final HierarchyPair resultPair =
+                    findPair(pairs, result.getHierarchy());
+                if (resultPair != null) {
+                    applyMember(
+                        source, target, resultPair, pairs, result, depth + 1);
+                }
             }
             return;
         }
