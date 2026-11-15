@@ -132,6 +132,19 @@ public class LookupCubeFunDef extends FunDefBase {
         return finder.found;
     }
 
+    /**
+     * Returns whether an expression calls LookupCube, directly or through
+     * calculated members and named sets.
+     *
+     * @param exp Expression
+     * @return Whether the expression uses LookupCube
+     */
+    public static boolean containsLookupCube(Exp exp) {
+        final LookupCubeFinder finder = new LookupCubeFinder();
+        finder.visitExp(exp);
+        return finder.found;
+    }
+
     private static class LookupCubeCalc extends GenericCalc {
         private final StringCalc cubeNameCalc;
         private final StringCalc expressionCalc;

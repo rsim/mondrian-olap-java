@@ -504,6 +504,67 @@ describe "LookupCube" do
     end
   end
 
+  # The sales_fact_1997 table has 113 products that the inventory_fact_1997 table does not have.
+  describe "members that have values only in the other cube" do
+    before(:all) do
+      schema = define_schema do
+        { "Inventory" => "inventory_fact_1997", "Sales" => "sales_fact_1997" }.each do |cube_name, fact_table|
+          cube cube_name do
+            table fact_table
+            dimension "Product", foreign_key: "product_id" do
+              hierarchy has_all: true, primary_key: "product_id" do
+                table "product"
+                level "Product Name", column: "product_name", unique_members: true
+              end
+            end
+            dimension "Store", foreign_key: "store_id" do
+              hierarchy has_all: true, primary_key: "store_id" do
+                table "store"
+                level "Store Country", column: "store_country", unique_members: true
+              end
+            end
+            if cube_name == "Inventory"
+              measure "Units Shipped", column: "units_shipped", aggregator: "sum"
+              calculated_member "Sales Units", dimension: "Measures",
+                formula: 'LookupCube("Sales", "[Measures].[Unit Sales]", SHARED_CONTEXT)'
+            else
+              measure "Unit Sales", column: "unit_sales", aggregator: "sum"
+            end
+          end
+        end
+      end
+      @only_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
+    end
+
+    after(:all) do
+      @only_olap&.close
+    end
+
+    def product_names(cube_name, measure)
+      @only_olap.execute(<<~MDX).row_names
+        SELECT {[Measures].[#{measure}]} ON COLUMNS, NON EMPTY [Product].[Product Name].Members ON ROWS
+        FROM [#{cube_name}]
+      MDX
+    end
+
+    def crossjoin_product_names(measures)
+      @only_olap.execute(<<~MDX).row_names.map(&:first)
+        SELECT {#{measures}} ON COLUMNS,
+          NON EMPTY CrossJoin([Product].[Product Name].Members, {[Store].[USA]}) ON ROWS
+        FROM [Inventory]
+      MDX
+    end
+
+    it "keeps them in NON EMPTY crossjoin rows" do
+      sales_products = product_names("Sales", "Unit Sales")
+      inventory_products = product_names("Inventory", "Units Shipped")
+      refute_empty sales_products - inventory_products
+      assert_equal sales_products.sort, crossjoin_product_names("[Measures].[Sales Units]").sort
+      assert_equal (sales_products | inventory_products).sort,
+        crossjoin_product_names("[Measures].[Units Shipped], [Measures].[Sales Units]").sort
+    end
+  end
+
   describe "calculated members of two cubes that look each other up" do
     before(:all) do
       schema = define_schema do

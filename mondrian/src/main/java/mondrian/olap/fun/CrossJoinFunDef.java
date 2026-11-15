@@ -604,11 +604,28 @@ public class CrossJoinFunDef extends FunDefBase {
       return null;
     }
 
+    // PATCH: The values of a calculated measure that calls LookupCube come from another cube, not from the stored
+    // measures of its expression, so the calculated measure itself is checked for data. A measure that refers to
+    // the crossjoin call is skipped, as its evaluation would evaluate the crossjoin again.
+    void addLookupCubeMeasure( Member calculatedMeasure ) {
+      final Exp exp = calculatedMeasure.getExpression();
+      if ( !LookupCubeFunDef.containsLookupCube( exp ) ) {
+        return;
+      }
+      finder.found = false;
+      exp.accept( finder );
+      if ( !finder.found ) {
+        queryMeasureSet.add( calculatedMeasure );
+      }
+    }
+
     private void process( final Member member ) {
       if ( member.isMeasure() ) {
         if ( member.isCalculated() ) {
           if ( activeMeasures.add( member ) ) {
             Exp exp = member.getExpression();
+            // PATCH: Check a calculated measure that calls LookupCube.
+            addLookupCubeMeasure( member );
             finder.found = false;
             exp.accept( finder );
             if ( !finder.found ) {
@@ -716,6 +733,8 @@ public class CrossJoinFunDef extends FunDefBase {
       for ( Member m : queryMeasureSet ) {
         if ( m.isCalculated() ) {
           Exp exp = m.getExpression();
+          // PATCH: Check a calculated measure that calls LookupCube.
+          measureVisitor.addLookupCubeMeasure( m );
           exp.accept( measureVisitor );
           exp.accept( memVisitor );
         } else {

@@ -349,6 +349,9 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   `isValidContext` also refuses a context with a null member, or with a
   compound slicer placeholder when the evaluator has no slicer tuples, as in
   the target cube of a mapped `LookupCube` context.
+- **`CrossJoinFunDef#nonEmptyList`**, the NON EMPTY crossjoin optimizer, also
+  checks calculated measures that call `LookupCube` for data, because their
+  values do not come from the stored measures of their expressions.
 - **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
   of another star.
 - **`FastBatchingCellReader#removeHeader`** removes a segment header whose
