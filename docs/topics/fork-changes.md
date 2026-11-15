@@ -291,6 +291,12 @@ deltas.
   the rollup came out empty, the cell request stayed unsatisfied, and the
   same rollup was proposed until the query failed with "Query required more
   than 12 iterations".
+- `SegmentBuilder#rollup` intersects the value list of a kept column with
+  the intersection of all earlier segments. Upstream intersected it with the
+  first segment's list, so a later segment added back values that an earlier
+  segment does not have. The rolled-up cells of those values missed that
+  segment's part, for example CA and OR without Q1, and queries returned
+  wrong totals without an error.
 - `RolapProperty` marks internal properties as `dependsOnLevelValue`.
 - `QueryTiming` guards the ms/invocation average against division by zero.
 - Cancellation: `CancellationChecker#checkCancelOrTimeout` checks the

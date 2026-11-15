@@ -276,6 +276,13 @@ public class SegmentBuilder {
                             // Best we can say is "we must have asked for the
                             // values that came back".
                             axis.lostPredicate = true;
+                            // PATCH: Keep the intersection of the values that
+                            // the segments so far requested. Intersecting
+                            // with the first segment's values only let a
+                            // later segment add back values that an earlier
+                            // segment does not have, so their cells missed
+                            // that segment's part.
+                            axis.requestedValues = filteredValues;
                         }
                     }
                 }
