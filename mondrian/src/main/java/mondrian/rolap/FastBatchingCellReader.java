@@ -1652,6 +1652,12 @@ class BatchLoader {
                 // better.
                 return true;
             }
+            // PATCH: LookupCube adds batches of other cubes to this reader.
+            // The closure columns of this cube do not apply to another star,
+            // so punt as for virtual cubes.
+            if (getStar() != cube.getStar()) {
+                return true;
+            }
             final BitKey closureColumns =
                 this.batchKey.getConstrainedColumnsBitKey()
                     .and(cubeClosureColumnBitKey);

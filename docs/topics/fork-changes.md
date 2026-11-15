@@ -318,6 +318,37 @@ uses it to attribute evaluation time per calculated member (using
 `Evaluator` interface and implemented in `RolapEvaluator`).
 `NonEmptyCrossJoinFunDef` marks its own timing.
 
+### 1.10 `LookupCube` function
+
+`LookupCube(<Cube Name>, <Expression String>[, SHARED_CONTEXT | <Dimension
+or Hierarchy>, ...])` evaluates an MDX expression in another cube (see
+[packages/olap-fun.md](../packages/olap-fun.md#cross-cube-lookups-lookupcube-fork)).
+The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
+`LookupCubeEvaluatorRoot`. The `// PATCH:` changes to existing classes are:
+
+- **`BuiltinFunTable`** registers the resolver.
+- **`RolapEvaluator#evaluateInCube`** is the entry point. It also limits
+  nesting to 16 levels, which stops calculated members of two cubes that look
+  each other up.
+- **`RolapEvaluatorRoot`**:
+  - a protected constructor for a query other than the statement's query;
+  - the per-execution lookup contexts, owned by the source root;
+  - `clearResultCache`, which also clears the lookup roots.
+- **`RolapResult`**:
+  - `RolapResultEvaluatorRoot` gains a constructor for a lookup root and
+    `getSlicerEvaluator()`. `RolapSetEvaluator` and `RolapNamedSetEvaluator`
+    use that method instead of `result.slicerEvaluator`, so sets of the
+    target cube are evaluated in its own default context through the source
+    result's phase loop.
+  - `CompoundSlicerRolapMember` is static and exposes `getTupleList()`, so
+    mapped compound slicers can be re-created in the target cube.
+- **`RolapCubeHierarchy#lookupCubeMember(RolapMember)`** maps a shared
+  dimension member between cubes without SQL.
+- **`Query#usesLookupCube`** and **`SqlContextConstraint#isValidContext`**
+  disable native NON EMPTY constraints for queries that use `LookupCube`.
+- **`FastBatchingCellReader.Batch#haveSameClosureColumns`** punts for batches
+  of another star.
+
 ## 2. Concurrency hardening
 
 Changes that replace upstream's coarse synchronization so many connections /

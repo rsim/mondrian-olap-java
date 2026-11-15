@@ -85,6 +85,16 @@ around anything that reads cells will either turn "value not loaded yet" into a
 wrong answer or break the chunking protocol. Wrappers that must catch broadly
 have to rethrow these two sentinels.
 
+### Requests from other cubes (`LookupCube`, fork)
+
+`LookupCube` evaluates expressions of another cube with an evaluator whose
+cell reader is the caller's `FastBatchingCellReader`. Its cell misses are
+recorded in the same request list as the misses of the query cube, returned as
+the same `valueNotReadyException` sentinel, and loaded in the same phase. Like
+the base cubes of a virtual cube, the batches simply have a different
+`RolapStar`. `Batch#haveSameClosureColumns` punts for batches of another star,
+because the reader cube's closure-column bit key does not apply to them.
+
 ## Anatomy of a CellRequest
 
 A `CellRequest` is the atom of the pipeline: *one measure* plus *one predicate

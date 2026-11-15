@@ -78,9 +78,15 @@ class RolapEvaluatorRoot {
   }
 
   private RolapEvaluatorRoot( Statement statement, Execution execution ) {
+    this( statement, statement.getQuery(), execution );
+  }
+
+  // PATCH: Allow a root for a query other than the statement's current query. LookupCube uses it to evaluate
+  // expressions in another cube within the source query's execution.
+  protected RolapEvaluatorRoot( Statement statement, Query query, Execution execution ) {
     this.execution = execution;
     this.statement = statement;
-    this.query = statement.getQuery();
+    this.query = query;
     this.cube = (RolapCube) query.getCube();
     this.connection = statement.getMondrianConnection();
     this.schemaReader = query.getSchemaReader( true );
@@ -270,6 +276,57 @@ class RolapEvaluatorRoot {
       expResultCache.clear();
     }
     tmpExpResultCache.clear();
+    // PATCH: Lookup cube roots cache results that depend on the same cell reader, so they are cleared together.
+    if ( lookupCubeContexts != null ) {
+      for ( LookupCubeContext context : lookupCubeContexts.values() ) {
+        context.clearResultCache( clearValidResult );
+      }
+    }
+  }
+
+  // PATCH: LookupCube support.
+  private Map<String, LookupCubeContext> lookupCubeContexts;
+  private int lookupCubeDepth;
+
+  /**
+   * Returns the root that owns the lookup cube contexts of the current execution. Contexts are shared by all roots of
+   * one execution, so that nested lookups do not create contexts that are never cleared.
+   */
+  RolapEvaluatorRoot getLookupCubeOwner() {
+    return this;
+  }
+
+  /**
+   * Returns the lookup context for a cube, creating it on first use.
+   *
+   * @param cubeName
+   *          Name of the target cube
+   * @return Lookup context
+   */
+  final LookupCubeContext getLookupCubeContext( String cubeName ) {
+    final RolapEvaluatorRoot owner = getLookupCubeOwner();
+    if ( owner != this ) {
+      return owner.getLookupCubeContext( cubeName );
+    }
+    if ( lookupCubeContexts == null ) {
+      lookupCubeContexts = new HashMap<String, LookupCubeContext>();
+    }
+    LookupCubeContext context = lookupCubeContexts.get( cubeName );
+    if ( context == null ) {
+      final RolapCube targetCube = LookupCubeContext.findCube( schemaReader, cubeName );
+      context = new LookupCubeContext( this, targetCube );
+      lookupCubeContexts.put( cubeName, context );
+    }
+    return context;
+  }
+
+  final int enterLookupCube() {
+    final RolapEvaluatorRoot owner = getLookupCubeOwner();
+    return ++owner.lookupCubeDepth;
+  }
+
+  final void exitLookupCube() {
+    getLookupCubeOwner().lookupCubeDepth--;
   }
 
   /**

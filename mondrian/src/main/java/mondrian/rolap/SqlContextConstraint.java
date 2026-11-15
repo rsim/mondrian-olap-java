@@ -13,6 +13,7 @@ package mondrian.rolap;
 import mondrian.mdx.MemberExpr;
 import mondrian.mdx.ResolvedFunCall;
 import mondrian.olap.*;
+import mondrian.olap.fun.LookupCubeFunDef;
 import mondrian.rolap.RestrictedMemberReader.MultiCardinalityDefaultMember;
 import mondrian.rolap.RolapHierarchy.LimitedRollupMember;
 import mondrian.rolap.aggmatcher.AggStar;
@@ -89,6 +90,13 @@ public class SqlContextConstraint
             }
             assert levels != null;
             query.setBaseCubes(baseCubeList);
+        }
+
+        // PATCH: LookupCube can return values for members that have no rows
+        // in the fact table of this cube, so joining the fact table would
+        // drop them. Non-empty members are then found by evaluating cells.
+        if (context.getQuery().usesLookupCube()) {
+            return false;
         }
 
         if (SqlConstraintUtils.measuresConflictWithMembers(

@@ -477,6 +477,23 @@ public class RolapCubeHierarchy extends RolapHierarchy {
         return cubeDimension.cube;
     }
 
+    /**
+     * Returns the member of this cube hierarchy that wraps a member of the
+     * underlying shared hierarchy. The parent chain is wrapped too.
+     *
+     * <p>PATCH: Used by LookupCube to map members of a shared dimension from
+     * one cube to another without SQL.
+     *
+     * @param rolapMember Member of the underlying hierarchy
+     * @return Member of this cube hierarchy
+     */
+    public RolapCubeMember lookupCubeMember(RolapMember rolapMember) {
+        return createAncestorMembers(
+            reader,
+            cubeLevels[rolapMember.getLevel().getDepth()],
+            rolapMember);
+    }
+
     private static RolapCubeMember createAncestorMembers(
         RolapCubeHierarchyMemberReader memberReader,
         RolapCubeLevel level,

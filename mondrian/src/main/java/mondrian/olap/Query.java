@@ -12,6 +12,7 @@ package mondrian.olap;
 
 import mondrian.calc.*;
 import mondrian.mdx.*;
+import mondrian.olap.fun.LookupCubeFunDef;
 import mondrian.olap.fun.ParameterFunDef;
 import mondrian.olap.type.*;
 import mondrian.resource.MondrianResource;
@@ -1177,6 +1178,17 @@ public class Query extends QueryPart {
    */
   public Set<Member> getMeasuresMembers() {
     return Collections.unmodifiableSet( measuresMembers );
+  }
+
+  // PATCH: Whether the query uses LookupCube. Native evaluation checks it, because members can have LookupCube values
+  // where the fact table of the query cube has no rows. Computed on first use.
+  private Boolean usesLookupCube;
+
+  public boolean usesLookupCube() {
+    if ( usesLookupCube == null ) {
+      usesLookupCube = LookupCubeFunDef.usesLookupCube( this );
+    }
+    return usesLookupCube;
   }
 
   /**

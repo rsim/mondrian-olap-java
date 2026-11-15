@@ -206,6 +206,53 @@ introspection), `MemberExtractingVisitor` / `ResolvedFunCallFinder` (AST
 visitors used by `ValidMeasure` and native analysis), and
 `MondrianEvaluationException` (what `FunUtil#newEvalException` throws).
 
+## Cross-cube lookups: `LookupCube` (fork)
+
+`LookupCubeFunDef` **(fork addition)** implements `LookupCube(<Cube Name>,
+<Expression String>[, SHARED_CONTEXT | <Dimension or Hierarchy>, ...])`, after the SQL
+Server Analysis Services function of the same name. It evaluates an MDX
+expression, given as a string, in another cube of the schema and returns
+`Category.Value`.
+
+- **Two arguments: SSAS semantics.** The expression is evaluated in the
+  default context of the target cube, so callers build coordinates into the
+  string (`"(" + [Store].CurrentMember.UniqueName + ", [Measures].[X])"`).
+- **Context mapping (fork extension).** `SHARED_CONTEXT` maps the current
+  members of all hierarchies that exist in both cubes, matched by unique name. Dimension
+  arguments map all of their hierarchies, and hierarchy arguments map only
+  those hierarchies. Hierarchy arguments are evaluated per call, so
+  `[Time].CurrentMember.Hierarchy` or a UDF that returns a hierarchy works.
+  Mapping covers the following member kinds:
+  - stored members: for a shared dimension through
+    `RolapCubeHierarchy#lookupCubeMember`, with no SQL; otherwise by unique
+    name;
+  - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
+    re-created in the target cube over the mapped tuples;
+  - calculated members that aggregate members or sets: `Aggregate(<set>)`,
+    `+` of members, or a member expression.
+
+  Any other calculated member on a mapped hierarchy fails the query.
+- **`SHARED_CONTEXT` is a reserved word**, like the flags of `Descendants`.
+  Reserved words apply to every unbracketed single-segment identifier of a
+  query, which is why the flag has a two-word name that hardly collides with
+  dimension or set names.
+- **Machinery.** The calc calls `RolapEvaluator#evaluateInCube`. That method
+  gets a `mondrian.rolap.LookupCubeContext` for the target cube, which is
+  created once per execution. The context holds:
+  - a target `Query`, with its own statement;
+  - a `LookupCubeEvaluatorRoot`;
+  - an LRU cache of compiled expressions, so each distinct string is parsed
+    once;
+  - memoized member mappings.
+
+  The target evaluator uses the caller's cell reader, so target cells are
+  batched with the source query's cells (see
+  [topics/cell-batching.md](../topics/cell-batching.md)).
+- **Native evaluation guard.** A query that uses `LookupCube` disables native
+  NON EMPTY constraints (`SqlContextConstraint#isValidContext` checks
+  `Query#usesLookupCube`), because joining the source fact table would drop
+  members that have values only in the target cube.
+
 ## Native SQL evaluation hook
 
 `CrossJoinFunDef`, `NonEmptyCrossJoinFunDef`, `FilterFunDef`,

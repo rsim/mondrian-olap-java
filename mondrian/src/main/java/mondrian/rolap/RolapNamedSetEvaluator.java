@@ -79,7 +79,8 @@ class RolapNamedSetEvaluator implements Evaluator.NamedSetEvaluator, TupleList.P
       if ( list == DUMMY_LIST ) {
         recursionCount++;
         if ( RECURSION_TOLERANCE > 0 && recursionCount > RECURSION_TOLERANCE ) {
-          throw rrer.result.slicerEvaluator.newEvalException( null, "Illegal attempt to reference value of named set '"
+          // PATCH: Use the root's slicer evaluator so that a LookupCube root evaluates sets in its own cube.
+          throw rrer.getSlicerEvaluator().newEvalException( null, "Illegal attempt to reference value of named set '"
               + namedSet.getName() + "' while evaluating itself" );
         }
       }
@@ -91,7 +92,8 @@ class RolapNamedSetEvaluator implements Evaluator.NamedSetEvaluator, TupleList.P
     list = DUMMY_LIST; // recursion detection
     try {
       final Calc calc = rrer.getCompiled( namedSet.getExp(), false, ResultStyle.ITERABLE );
-      TupleIterable iterable = (TupleIterable) rrer.result.evaluateExp( calc, rrer.result.slicerEvaluator, evaluator );
+      // PATCH: Use the root's slicer evaluator so that a LookupCube root evaluates sets in its own cube.
+      TupleIterable iterable = (TupleIterable) rrer.result.evaluateExp( calc, rrer.getSlicerEvaluator(), evaluator );
 
       // Axes can be in two forms: list or iterable. If iterable, we
       // need to materialize it, to ensure that all cell values are in
