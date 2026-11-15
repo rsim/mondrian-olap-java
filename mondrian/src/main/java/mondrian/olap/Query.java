@@ -1191,6 +1191,12 @@ public class Query extends QueryPart {
     return usesLookupCube;
   }
 
+  // PATCH: Records that an expression which is compiled for this query, outside its formulas and axes, uses
+  // LookupCube.
+  public void setUsesLookupCube() {
+    usesLookupCube = Boolean.TRUE;
+  }
+
   /**
    * Indicates that the query cannot use native cross joins to process this virtual cube
    */

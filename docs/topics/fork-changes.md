@@ -346,6 +346,8 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   dimension member between cubes without SQL.
 - **`Query#usesLookupCube`** and **`SqlContextConstraint#isValidContext`**
   disable native NON EMPTY constraints for queries that use `LookupCube`.
+  `Query#setUsesLookupCube` marks the target query of a lookup whose
+  expression calls `LookupCube` in its turn.
   `isValidContext` also refuses a context with a null member, or with a
   compound slicer placeholder when the evaluator has no slicer tuples, as in
   the target cube of a mapped `LookupCube` context.

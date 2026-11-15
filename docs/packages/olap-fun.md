@@ -255,6 +255,9 @@ expression, given as a string, in another cube of the schema and returns
   For the same reason, the NON EMPTY crossjoin optimizer
   (`CrossJoinFunDef#nonEmptyList`) checks calculated measures that call
   `LookupCube` for data, not only the stored measures of their expressions.
+  A target expression that calls `LookupCube` in its turn marks the target
+  query with `Query#setUsesLookupCube`, because the target query has no
+  formulas or axes that would show it.
   Inside the target cube, native evaluation also stops when the mapped context
   has placeholder members or null members, because SQL cannot constrain on
   them and would ignore that context.

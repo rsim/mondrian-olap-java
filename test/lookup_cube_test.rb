@@ -563,6 +563,22 @@ describe "LookupCube" do
       assert_equal (sales_products | inventory_products).sort,
         crossjoin_product_names("[Measures].[Units Shipped], [Measures].[Sales Units]").sort
     end
+
+    it "keeps them in a NON EMPTY crossjoin of an expression that the other cube evaluates" do
+      # The Sales Units measure of the Inventory cube looks up the Sales cube in its turn.
+      formula = "Count(Filter(NonEmptyCrossJoin([Product].[Product Name].Members, {[Store].[USA]}), " \
+        "[Measures].[Sales Units] > 0))"
+      expected = @only_olap.execute(<<~MDX).values
+        WITH MEMBER [Measures].[Count] AS '#{formula}'
+        SELECT {[Measures].[Count]} ON COLUMNS FROM [Inventory]
+      MDX
+      assert_equal [product_names("Sales", "Unit Sales").size], expected
+      actual = @only_olap.execute(<<~MDX).values
+        WITH MEMBER [Measures].[Count] AS 'LookupCube("Inventory", "#{formula}")'
+        SELECT {[Measures].[Count]} ON COLUMNS FROM [Sales]
+      MDX
+      assert_equal expected, actual
+    end
   end
 
   describe "calculated members of two cubes that look each other up" do

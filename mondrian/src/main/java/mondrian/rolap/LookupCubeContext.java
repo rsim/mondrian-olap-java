@@ -41,6 +41,7 @@ import mondrian.olap.SchemaReader;
 import mondrian.olap.Util;
 import mondrian.olap.fun.AbstractAggregateFunDef;
 import mondrian.olap.fun.AggregateFunDef;
+import mondrian.olap.fun.LookupCubeFunDef;
 import mondrian.olap.fun.ParenthesesFunDef;
 import mondrian.olap.type.MemberType;
 import mondrian.olap.type.ScalarType;
@@ -264,6 +265,12 @@ class LookupCubeContext {
                 targetQuery.createValidator().validate(parsed, false);
             if (resolved.getType() instanceof SetType) {
                 throw error("expression must return a value, not a set");
+            }
+            // Native evaluation checks the query of the target evaluator, and
+            // the target query has no formulas or axes that show a nested
+            // LookupCube.
+            if (LookupCubeFunDef.containsLookupCube(resolved)) {
+                targetQuery.setUsesLookupCube();
             }
             return targetQuery.compileExpression(resolved, true, null);
         } catch (RuntimeException e) {
