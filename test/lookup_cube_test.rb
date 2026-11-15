@@ -174,6 +174,14 @@ describe "LookupCube" do
       assert_equal expected.flat_map { |row| [row] * 4 }, actual
     end
 
+    it "maps calculated members that aggregate only hierarchies that are not listed" do
+      # The aggregated Store member is not mapped, so the Time member does not constrain the other cube.
+      expected = values(warehouse_query("[Measures].[Warehouse Sales]", rows: "{[Time].[1997]}"))
+      actual = values(lookup_query('LookupCube("Warehouse", "[Measures].[Warehouse Sales]", [Time])',
+        rows: "{[Time].[California]}", with: "MEMBER [Time].[California] AS 'Aggregate({[Store].[USA].[CA]})'"))
+      assert_equal expected, actual
+    end
+
     it "maps all hierarchies of a listed dimension" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", [Time])',

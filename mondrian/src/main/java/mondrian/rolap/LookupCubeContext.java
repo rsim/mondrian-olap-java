@@ -821,6 +821,7 @@ class LookupCubeContext {
         final Set<List<Member>> mappedTuples =
             new LinkedHashSet<List<Member>>();
         List<RolapCubeHierarchy> targetHierarchyList = null;
+        boolean unconstrained = false;
         for (List<Member> tuple : tupleList) {
             final List<Member> mappedTuple = new ArrayList<Member>();
             final List<RolapCubeHierarchy> tupleHierarchies =
@@ -852,7 +853,14 @@ class LookupCubeContext {
             // there, so its tuple does not contribute to the aggregation.
             if (!missing && !mappedTuple.isEmpty()) {
                 mappedTuples.add(mappedTuple);
+            } else if (!missing) {
+                unconstrained = true;
             }
+        }
+        // Tuples only of hierarchies that are not mapped do not constrain the
+        // target cube, so the context keeps its default members.
+        if (mappedTuples.isEmpty() && unconstrained) {
+            return new Member[0];
         }
         if (mappedTuples.isEmpty()) {
             final List<Member> nullMembers = new ArrayList<Member>();
