@@ -338,6 +338,18 @@ describe "LookupCube" do
       refute_empty warehouse_sqls
       assert_operator warehouse_sqls.size, :<=, 2, warehouse_sqls.join("\n\n")
     end
+
+    it "loads the cells of the other cube again after the cache is flushed" do
+      mdx = lookup_query('LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',
+        rows: "[Store].[USA].Children")
+      # Run the query in each thread of the query executor, so that the next query runs in
+      # a thread that has run it before.
+      threads = Java::MondrianOlap::MondrianProperties.instance.RolapConnectionShepherdNbThreads.get
+      (threads * 2).times { values(mdx) }
+      flush_cube_cache("Warehouse")
+      sqls = record_sql { values(mdx) }
+      refute_empty sqls.grep(/inventory_fact_1997/)
+    end
   end
 
   describe "errors" do

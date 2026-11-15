@@ -138,6 +138,14 @@ class LookupCubeContext {
     LookupCubeContext(RolapEvaluatorRoot owner, RolapCube targetCube) {
         this.targetCube = targetCube;
         this.connection = owner.connection;
+        // An execution clears the thread-local segments only of the stars of
+        // its own cube. Segments of the target star can remain from an
+        // earlier query in this thread, and a cache flush does not clear them.
+        if (!owner.cube.isVirtual()
+            && targetCube.getStar() != owner.cube.getStar())
+        {
+            targetCube.clearCachedAggregations(true);
+        }
         final LookupCubeStatement statement =
             new LookupCubeStatement(connection, owner.execution);
         this.targetQuery =
