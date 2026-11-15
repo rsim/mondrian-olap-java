@@ -392,6 +392,55 @@ describe "LookupCube" do
     end
   end
 
+  describe "query limits while the expression is compiled" do
+    class TimeoutOnSqlHook
+      include Java::MondrianRolap::RolapUtil::ExecuteQueryHook
+
+      def onExecuteQuery(sql)
+        raise Java::MondrianOlap::QueryTimeoutException.new("Query timeout of 1 seconds reached")
+      end
+    end
+
+    before(:all) do
+      # A schema of its own, so that the members of the expression are not cached yet
+      # and compiling the expression runs SQL.
+      schema = define_schema do
+        cube "Source" do
+          table "sales_fact_1997"
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum"
+        end
+        cube "Target" do
+          table "sales_fact_1997"
+          dimension "Customers", foreign_key: "customer_id" do
+            hierarchy has_all: true, primary_key: "customer_id" do
+              table "customer"
+              level "Country", column: "country", unique_members: true
+            end
+          end
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum"
+        end
+      end
+      @limit_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
+    end
+
+    after(:all) do
+      @limit_olap&.close
+    end
+
+    it "keeps the query timeout as the root cause" do
+      RolapUtil.setHook(TimeoutOnSqlHook.new)
+      error = assert_raises(Mondrian::OLAP::Error) do
+        @limit_olap.execute(<<~MDX)
+          WITH MEMBER [Measures].[Lookup] AS 'LookupCube("Target", "([Measures].[Unit Sales], [Customers].[USA])")'
+          SELECT {[Measures].[Lookup]} ON COLUMNS FROM [Source]
+        MDX
+      end
+      assert_kind_of Java::MondrianOlap::QueryTimeoutException, error.root_cause
+    ensure
+      RolapUtil.setHook(nil)
+    end
+  end
+
   describe "calculated members of two cubes that look each other up" do
     before(:all) do
       schema = define_schema do

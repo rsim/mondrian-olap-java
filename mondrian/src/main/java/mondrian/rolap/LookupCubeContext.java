@@ -35,6 +35,7 @@ import mondrian.olap.Parameter;
 import mondrian.olap.Query;
 import mondrian.olap.QueryAxis;
 import mondrian.olap.QueryPart;
+import mondrian.olap.ResultLimitExceededException;
 import mondrian.olap.Role;
 import mondrian.olap.SchemaReader;
 import mondrian.olap.Util;
@@ -258,6 +259,11 @@ class LookupCubeContext {
             }
             return targetQuery.compileExpression(resolved, true, null);
         } catch (RuntimeException e) {
+            // Query limits are not errors of the expression, and callers
+            // recognize them by the root cause.
+            if (isResultLimitExceeded(e)) {
+                throw e;
+            }
             // The message includes the cause, and the cause is not chained, so
             // that callers that show the root cause see the cube and the
             // expression too.
@@ -266,6 +272,18 @@ class LookupCubeContext {
                 + "' in cube '" + targetCube.getName() + "': "
                 + rootMessage(e));
         }
+    }
+
+    private static boolean isResultLimitExceeded(Throwable e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ResultLimitExceededException) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static String rootMessage(Throwable e) {
