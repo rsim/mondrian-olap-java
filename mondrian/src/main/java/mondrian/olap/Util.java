@@ -2308,6 +2308,10 @@ public class Util extends XOMUtil {
         E e1 = it1.next();
         E e2 = it2.next();
         for (;;) {
+            // PATCH: compareTo may return any positive number (String
+            // returns the character difference). Testing for 1 advanced the
+            // larger element instead and lost matches, e.g. {WA} and
+            // {CA, OR, WA} gave an empty intersection.
             final int compare = e1.compareTo(e2);
             if (compare == 0) {
                 result[i++] = e1;
@@ -2316,7 +2320,7 @@ public class Util extends XOMUtil {
                 }
                 e1 = it1.next();
                 e2 = it2.next();
-            } else if (compare == 1) {
+            } else if (compare > 0) {
                 if (!it2.hasNext()) {
                     break;
                 }
