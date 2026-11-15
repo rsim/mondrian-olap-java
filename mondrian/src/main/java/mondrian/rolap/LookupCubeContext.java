@@ -815,7 +815,11 @@ class LookupCubeContext {
         final SchemaReader schemaReader = targetRoot.schemaReader;
         final RolapCubeHierarchy target = pair.target;
         if (member.isAll()) {
-            if (target.hasAll()) {
+            // A role whose top level is below the All member gets its default
+            // member, as in a query of the target cube.
+            if (target.hasAll()
+                && schemaReader.getRole().canAccess(target.getAllMember()))
+            {
                 return schemaReader.substitute(target.getAllMember());
             }
             return targetRoot.defaultMembers[target.getOrdinalInCube()];

@@ -404,6 +404,57 @@ describe "LookupCube" do
     end
   end
 
+  describe "with a role that cannot access the All member of the other cube" do
+    before(:all) do
+      store_dimension = proc do
+        dimension "Store", foreign_key: "store_id" do
+          hierarchy has_all: true, all_member_name: "All Stores", primary_key: "store_id" do
+            table "store"
+            level "Store Country", column: "store_country", unique_members: true
+            level "Store State", column: "store_state", unique_members: true
+          end
+        end
+      end
+      schema = define_schema do
+        cube "Source" do
+          table "sales_fact_1997"
+          instance_eval(&store_dimension)
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum"
+        end
+        cube "Target" do
+          table "sales_fact_1997"
+          instance_eval(&store_dimension)
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum"
+        end
+        role "California" do
+          schema_grant access: "none" do
+            cube_grant cube: "Source", access: "all"
+            cube_grant cube: "Target", access: "all" do
+              hierarchy_grant hierarchy: "[Store]", access: "custom", top_level: "[Store].[Store State]" do
+                member_grant member: "[Store].[USA].[CA]", access: "all"
+              end
+            end
+          end
+        end
+      end
+      @role_olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
+      @role_olap.role_name = "California"
+    end
+
+    after(:all) do
+      @role_olap&.close
+    end
+
+    it "maps the All member to the default member of the role" do
+      expected = @role_olap.execute("SELECT {[Measures].[Unit Sales]} ON COLUMNS FROM [Target]").values
+      actual = @role_olap.execute(<<~MDX).values
+        WITH MEMBER [Measures].[Lookup] AS 'LookupCube("Target", "[Measures].[Unit Sales]", SHARED_CONTEXT)'
+        SELECT {[Measures].[Lookup]} ON COLUMNS FROM [Source]
+      MDX
+      assert_equal expected, actual
+    end
+  end
+
   describe "query limits while the expression is compiled" do
     class TimeoutOnSqlHook
       include Java::MondrianRolap::RolapUtil::ExecuteQueryHook
