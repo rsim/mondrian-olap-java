@@ -296,6 +296,16 @@ describe "LookupCube" do
       )
     end
 
+    it "maps calculated members that aggregate tuples of a compound slicer hierarchy" do
+      # The calculated member sets the Store hierarchy, so it overrides the compound slicer.
+      assert_lookup_equals_warehouse(
+        'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',
+        rows: "{[Time].[Q1 in CA]}",
+        where: "{[Store].[USA].[OR], [Store].[USA].[WA]}",
+        with: "MEMBER [Time].[Q1 in CA] AS 'Aggregate({([Time].[1997].[Q1], [Store].[USA].[CA])})'"
+      )
+    end
+
     it "maps calculated members that add members" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',

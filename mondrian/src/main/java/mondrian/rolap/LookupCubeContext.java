@@ -483,19 +483,34 @@ class LookupCubeContext {
                 calculatedMembers.add(member);
             }
         }
+        Set<Hierarchy> calculatedHierarchies = Collections.emptySet();
         if (calculatedPairs != null) {
+            final List<Member> mapped = new ArrayList<Member>();
             for (int i = 0; i < calculatedPairs.size(); i++) {
-                applyMember(
-                    source, target, calculatedPairs.get(i), pairs,
-                    calculatedMembers.get(i), 0);
+                mapCalculatedMember(
+                    source, calculatedPairs.get(i), pairs,
+                    calculatedMembers.get(i), 0, mapped);
+            }
+            calculatedHierarchies = new HashSet<Hierarchy>();
+            for (Member member : mapped) {
+                target.setContext(member);
+                calculatedHierarchies.add(member.getHierarchy());
             }
         }
         if (compoundSlicers != null) {
             for (Map.Entry<TupleList, List<HierarchyPair>> entry
                 : compoundSlicers.entrySet())
             {
-                applyTupleList(
-                    target, entry.getKey(), entry.getValue(), null);
+                for (Member member
+                    : mapTupleList(entry.getKey(), entry.getValue(), null))
+                {
+                    // In the source cube, a calculated member that sets a
+                    // hierarchy of a compound slicer overrides the slicer,
+                    // which has the lowest solve order.
+                    if (!calculatedHierarchies.contains(member.getHierarchy())) {
+                        target.setContext(member);
+                    }
+                }
             }
         }
     }
@@ -518,16 +533,20 @@ class LookupCubeContext {
             || member instanceof RolapHierarchy.LimitedRollupMember;
     }
 
-    private void applyMember(
+    /**
+     * Maps a member of a calculated member's context to the target cube and
+     * adds the target members to set, in order, to a list.
+     */
+    private void mapCalculatedMember(
         RolapEvaluator source,
-        RolapEvaluator target,
         HierarchyPair pair,
         List<HierarchyPair> pairs,
         Member member,
-        int depth)
+        int depth,
+        List<Member> mapped)
     {
         if (isMappedDirectly(member)) {
-            target.setContext(mapMember(pair, member));
+            mapped.add(mapMember(pair, member));
             return;
         }
         if (depth > MAX_CALCULATED_MEMBER_DEPTH) {
@@ -538,22 +557,23 @@ class LookupCubeContext {
             final Member result =
                 (Member) evaluateCached(source, pair, member, expression);
             if (result == null || result.isNull()) {
-                target.setContext(pair.target.getNullMember());
+                mapped.add(pair.target.getNullMember());
             } else if (result.getHierarchy().equals(pair.source)) {
-                applyMember(source, target, pair, pairs, result, depth + 1);
+                mapCalculatedMember(
+                    source, pair, pairs, result, depth + 1, mapped);
             } else {
                 // A member of another hierarchy is evaluated with the default
                 // member of the calculated member's hierarchy, as in the
                 // source cube.
-                applyMember(
-                    source, target, pair, pairs,
+                mapCalculatedMember(
+                    source, pair, pairs,
                     source.root.defaultMembers[pair.source.getOrdinalInCube()],
-                    depth + 1);
+                    depth + 1, mapped);
                 final HierarchyPair resultPair =
                     findPair(pairs, result.getHierarchy());
                 if (resultPair != null) {
-                    applyMember(
-                        source, target, resultPair, pairs, result, depth + 1);
+                    mapCalculatedMember(
+                        source, resultPair, pairs, result, depth + 1, mapped);
                 }
             }
             return;
@@ -564,7 +584,7 @@ class LookupCubeContext {
         final List<Exp> operands = new ArrayList<Exp>();
         collectAddedOperands(expression, operands);
         if (operands.size() > 1) {
-            applySum(source, target, pair, pairs, member, operands);
+            mapped.add(mapSum(source, pair, pairs, member, operands));
             return;
         }
         final Exp set = aggregatedSet(expression);
@@ -577,19 +597,17 @@ class LookupCubeContext {
                 : evaluateSet(source, pair, set);
         // An aggregated member sets the context of all hierarchies of its
         // tuples, so all mapped hierarchies of the tuples are used.
-        applyTupleList(target, tupleList, pairs, pair);
+        mapped.addAll(Arrays.asList(mapTupleList(tupleList, pairs, pair)));
     }
 
     /**
-     * Sets the context of a calculated member that adds members or
-     * aggregations, such as {@code [Time].[2024] + [Time].[2025]}. Its
+     * Maps a calculated member that adds members or aggregations, such as {@code [Time].[2024] + [Time].[2025]}. Its
      * operands are mapped separately and their values are added, as in the
      * source cube, because an aggregation of all operands would count an
      * operand only once and would not add the values of a distinct count.
      */
-    private void applySum(
+    private Member mapSum(
         RolapEvaluator source,
-        RolapEvaluator target,
         HierarchyPair pair,
         List<HierarchyPair> pairs,
         Member member,
@@ -604,7 +622,7 @@ class LookupCubeContext {
             }
             mappedOperands.add(
                 Arrays.asList(
-                    mapTupleList(evaluateSet(source, pair, set), pairs, pair)));
+                    mapTuples(evaluateSet(source, pair, set), pairs, pair)));
         }
         final List<Object> key = new ArrayList<Object>(2);
         key.add(pair.target);
@@ -624,7 +642,7 @@ class LookupCubeContext {
             };
             placeholders.put(key, members);
         }
-        target.setContext(members[0]);
+        return members[0];
     }
 
     /**
@@ -753,39 +771,26 @@ class LookupCubeContext {
     }
 
     /**
-     * Maps a list of source tuples to the target cube and sets the context of
-     * the target evaluator to them. A single tuple is set as the context; for
-     * several tuples, placeholder members aggregate the tuples in the target
-     * cube in the same way as a compound slicer.
+     * Maps a list of source tuples to target members to set as the context.
+     * For a single tuple, these are its members; for several tuples,
+     * placeholder members aggregate the tuples in the target cube in the same
+     * way as a compound slicer.
      *
-     * @param target Target evaluator
      * @param tupleList Source tuples
      * @param pairs Hierarchies that can be mapped
      * @param ownerPair Hierarchy of the calculated member that is expanded,
      * or null for a compound slicer
      */
-    private void applyTupleList(
-        RolapEvaluator target,
+    private Member[] mapTupleList(
         List<List<Member>> tupleList,
         List<HierarchyPair> pairs,
         HierarchyPair ownerPair)
     {
         // Empty lists of different calculated members can be one shared
         // instance, and their mapping depends on the owner hierarchy.
-        final Member[] members =
-            tupleList.isEmpty()
-                ? mapTupleList(tupleList, pairs, ownerPair)
-                : getMappedTupleList(tupleList, pairs, ownerPair);
-        for (Member member : members) {
-            target.setContext(member);
+        if (tupleList.isEmpty()) {
+            return mapTuples(tupleList, pairs, ownerPair);
         }
-    }
-
-    private Member[] getMappedTupleList(
-        List<List<Member>> tupleList,
-        List<HierarchyPair> pairs,
-        HierarchyPair ownerPair)
-    {
         Map<List<HierarchyPair>, Member[]> mappedByPairs =
             mappedTupleLists.get(tupleList);
         if (mappedByPairs == null) {
@@ -797,13 +802,13 @@ class LookupCubeContext {
         }
         Member[] members = mappedByPairs.get(pairs);
         if (members == null) {
-            members = mapTupleList(tupleList, pairs, ownerPair);
+            members = mapTuples(tupleList, pairs, ownerPair);
             mappedByPairs.put(pairs, members);
         }
         return members;
     }
 
-    private Member[] mapTupleList(
+    private Member[] mapTuples(
         List<List<Member>> tupleList,
         List<HierarchyPair> pairs,
         HierarchyPair ownerPair)

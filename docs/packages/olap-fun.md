@@ -227,7 +227,9 @@ expression, given as a string, in another cube of the schema and returns
     `RolapCubeHierarchy#lookupCubeMember`, with no SQL; otherwise by unique
     name;
   - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
-    re-created in the target cube over the mapped tuples;
+    re-created in the target cube over the mapped tuples. They are set last
+    and not on hierarchies that a mapped calculated member sets, because the
+    compound slicer has the lowest solve order;
   - calculated members that aggregate members or sets: `Aggregate(<set>)`
     or a member expression. A member expression that returns a member of
     another hierarchy maps that member, and the calculated member's own
