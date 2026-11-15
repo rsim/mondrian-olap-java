@@ -29,6 +29,7 @@ import mondrian.olap.ExpCacheDescriptor;
 import mondrian.olap.Formula;
 import mondrian.olap.Hierarchy;
 import mondrian.olap.Member;
+import mondrian.olap.MondrianProperties;
 import mondrian.olap.MondrianException;
 import mondrian.olap.OlapElement;
 import mondrian.olap.Parameter;
@@ -51,6 +52,7 @@ import mondrian.server.Execution;
 import mondrian.server.StatementImpl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -530,60 +532,125 @@ class LookupCubeContext {
             }
             return;
         }
-        final List<Exp> sets = new ArrayList<Exp>();
-        if (expression == null || !collectAggregateSets(expression, sets)) {
+        if (expression == null) {
             throw unsupportedMember(pair, member);
         }
-        final List<List<Member>> tupleList;
-        if (sets.size() == 1 && sets.get(0).getType() instanceof SetType) {
-            tupleList =
-                (TupleList) evaluateCached(source, pair, member, sets.get(0));
-        } else {
-            tupleList = new ArrayList<List<Member>>();
-            for (Exp set : sets) {
-                tupleList.addAll(evaluateSet(source, pair, set));
-            }
+        final List<Exp> operands = new ArrayList<Exp>();
+        collectAddedOperands(expression, operands);
+        if (operands.size() > 1) {
+            applySum(source, target, pair, pairs, member, operands);
+            return;
         }
+        final Exp set = aggregatedSet(expression);
+        if (set == null) {
+            throw unsupportedMember(pair, member);
+        }
+        final List<List<Member>> tupleList =
+            set.getType() instanceof SetType
+                ? (TupleList) evaluateCached(source, pair, member, set)
+                : evaluateSet(source, pair, set);
         // An aggregated member sets the context of all hierarchies of its
         // tuples, so all mapped hierarchies of the tuples are used.
         applyTupleList(target, tupleList, pairs, pair);
     }
 
     /**
-     * Collects the set arguments of a calculated member expression that is an
-     * aggregation of members or sets, such as {@code Aggregate({...})},
-     * {@code [Time].[2024] + [Time].[2025]} or a member reference.
-     *
-     * @return whether the expression is supported
+     * Sets the context of a calculated member that adds members or
+     * aggregations, such as {@code [Time].[2024] + [Time].[2025]}. Its
+     * operands are mapped separately and their values are added, as in the
+     * source cube, because an aggregation of all operands would count an
+     * operand only once and would not add the values of a distinct count.
      */
-    private static boolean collectAggregateSets(Exp exp, List<Exp> sets) {
-        if (exp instanceof ResolvedFunCall) {
-            final ResolvedFunCall call = (ResolvedFunCall) exp;
-            if (call.getFunDef() instanceof ParenthesesFunDef
-                && call.getArgCount() == 1)
-            {
-                return collectAggregateSets(call.getArg(0), sets);
+    private void applySum(
+        RolapEvaluator source,
+        RolapEvaluator target,
+        HierarchyPair pair,
+        List<HierarchyPair> pairs,
+        Member member,
+        List<Exp> operands)
+    {
+        final List<List<Member>> mappedOperands =
+            new ArrayList<List<Member>>(operands.size());
+        for (Exp operand : operands) {
+            final Exp set = aggregatedSet(operand);
+            if (set == null) {
+                throw unsupportedMember(pair, member);
             }
+            mappedOperands.add(
+                Arrays.asList(
+                    mapTupleList(evaluateSet(source, pair, set), pairs, pair)));
+        }
+        final List<Object> key = new ArrayList<Object>(2);
+        key.add(pair.target);
+        key.add(mappedOperands);
+        Member[] members = placeholders.get(key);
+        if (members == null) {
+            final DummyExp exp = new DummyExp(new ScalarType());
+            final Calc calc =
+                new CacheCalc(
+                    exp,
+                    new ExpCacheDescriptor(
+                        exp, new SumOperandsCalc(mappedOperands),
+                        workEvaluator));
+            members = new Member[] {
+                new SumPlaceholderMember(
+                    (RolapMember) pair.target.getNullMember(), calc)
+            };
+            placeholders.put(key, members);
+        }
+        target.setContext(members[0]);
+    }
+
+    /**
+     * Collects the operands of an expression that adds values, such as
+     * {@code [Time].[2024] + [Time].[2025] + [Time].[2026]}, or the expression
+     * itself if it does not add values.
+     */
+    private static void collectAddedOperands(Exp exp, List<Exp> operands) {
+        final Exp unwrapped = withoutParentheses(exp);
+        if (unwrapped instanceof ResolvedFunCall
+            && ((ResolvedFunCall) unwrapped).getFunName().equals("+")
+            && ((ResolvedFunCall) unwrapped).getArgCount() == 2)
+        {
+            for (Exp arg : ((ResolvedFunCall) unwrapped).getArgs()) {
+                collectAddedOperands(arg, operands);
+            }
+        } else {
+            operands.add(unwrapped);
+        }
+    }
+
+    /**
+     * Returns the set or member that a calculated member expression
+     * aggregates, such as {@code Aggregate({...})} or a member reference.
+     *
+     * @return set or member expression, or null if the expression is not
+     * supported
+     */
+    private static Exp aggregatedSet(Exp exp) {
+        final Exp unwrapped = withoutParentheses(exp);
+        if (unwrapped instanceof ResolvedFunCall) {
+            final ResolvedFunCall call = (ResolvedFunCall) unwrapped;
             if (call.getFunDef() instanceof AggregateFunDef
                 && call.getArgCount() == 1)
             {
-                sets.add(call.getArg(0));
-                return true;
-            }
-            if (call.getFunName().equals("+")) {
-                for (Exp arg : call.getArgs()) {
-                    if (!collectAggregateSets(arg, sets)) {
-                        return false;
-                    }
-                }
-                return true;
+                return call.getArg(0);
             }
         }
-        if (exp.getType() instanceof MemberType) {
-            sets.add(exp);
-            return true;
+        if (unwrapped.getType() instanceof MemberType) {
+            return unwrapped;
         }
-        return false;
+        return null;
+    }
+
+    private static Exp withoutParentheses(Exp exp) {
+        while (exp instanceof ResolvedFunCall
+            && ((ResolvedFunCall) exp).getFunDef() instanceof ParenthesesFunDef
+            && ((ResolvedFunCall) exp).getArgCount() == 1)
+        {
+            exp = ((ResolvedFunCall) exp).getArg(0);
+        }
+        return exp;
     }
 
     /**
@@ -916,6 +983,61 @@ class LookupCubeContext {
     }
 
     /**
+     * Placeholder member that adds the values of the mapped operands of a
+     * calculated member such as {@code [Time].[2024] + [Time].[2025]}.
+     *
+     * <p>It is not a compound slicer placeholder, so that a nested LookupCube
+     * does not map it as an aggregation. It is calculated, so a nested
+     * LookupCube fails for it as for other unsupported calculated members.
+     */
+    private static class SumPlaceholderMember extends DelegatingRolapMember {
+        private final Calc calc;
+        private final int solveOrder;
+
+        SumPlaceholderMember(RolapMember nullMember, Calc calc) {
+            super(nullMember);
+            this.calc = calc;
+            // The same solve order as the aggregating placeholders, so that
+            // calculated measures of the expression are evaluated first.
+            this.solveOrder =
+                MondrianProperties.instance()
+                    .CompoundSlicerMemberSolveOrder.get();
+        }
+
+        public boolean isCalculated() {
+            return true;
+        }
+
+        public boolean isEvaluated() {
+            return true;
+        }
+
+        public Exp getExpression() {
+            return new DummyExp(calc.getType());
+        }
+
+        public Calc getCompiledExpression(RolapEvaluatorRoot root) {
+            return calc;
+        }
+
+        public int getSolveOrder() {
+            return solveOrder;
+        }
+
+        public boolean equals(Object o) {
+            return o == this;
+        }
+
+        public boolean equals(OlapElement o) {
+            return o == this;
+        }
+
+        public int hashCode() {
+            return System.identityHashCode(this);
+        }
+    }
+
+    /**
      * Pair of a source cube hierarchy and the target cube hierarchy with the
      * same unique name.
      */
@@ -1012,6 +1134,54 @@ class LookupCubeContext {
             }
             return new DelegatingTupleList(
                 keepCount, new ArrayList<List<Member>>(tuples));
+        }
+
+        public boolean dependsOn(Hierarchy hierarchy) {
+            return true;
+        }
+    }
+
+    /**
+     * Adds the values of the current measure for each mapped operand. Empty
+     * values are skipped, and the sum of empty values is empty, as for the
+     * {@code +} operator.
+     */
+    private static class SumOperandsCalc extends GenericCalc {
+        private final List<List<Member>> operands;
+        private final Calc valueCalc =
+            new ValueCalc(new DummyExp(new ScalarType()));
+
+        SumOperandsCalc(List<List<Member>> operands) {
+            super(new DummyExp(new ScalarType()), new Calc[0]);
+            this.operands = operands;
+        }
+
+        public Object evaluate(Evaluator evaluator) {
+            double sum = 0;
+            boolean empty = true;
+            Object nonNumeric = null;
+            // All operands are evaluated, also after a value that is not a
+            // number, so that the cells of all operands are batched.
+            for (List<Member> operand : operands) {
+                final int savepoint = evaluator.savepoint();
+                final Object value;
+                try {
+                    evaluator.setContext(operand);
+                    value = valueCalc.evaluate(evaluator);
+                } finally {
+                    evaluator.restore(savepoint);
+                }
+                if (value instanceof Number) {
+                    sum += ((Number) value).doubleValue();
+                    empty = false;
+                } else if (value != null && nonNumeric == null) {
+                    nonNumeric = value;
+                }
+            }
+            if (nonNumeric != null) {
+                return nonNumeric;
+            }
+            return empty ? null : sum;
         }
 
         public boolean dependsOn(Hierarchy hierarchy) {

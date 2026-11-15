@@ -228,10 +228,15 @@ expression, given as a string, in another cube of the schema and returns
     name;
   - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
     re-created in the target cube over the mapped tuples;
-  - calculated members that aggregate members or sets: `Aggregate(<set>)`,
-    `+` of members, or a member expression.
+  - calculated members that aggregate members or sets: `Aggregate(<set>)`
+    or a member expression;
+  - calculated members that add such operands, such as `[Time].[2024] +
+    [Time].[2025]`: each operand is mapped separately and a
+    `SumPlaceholderMember` adds their values, because an aggregation would
+    count a repeated operand once and would not add distinct counts.
 
-  Any other calculated member on a mapped hierarchy fails the query.
+  Any other calculated member on a mapped hierarchy fails the query, also a
+  calculated member inside the set of an aggregated member.
 - **`SHARED_CONTEXT` is a reserved word**, like the flags of `Descendants`.
   Reserved words apply to every unbracketed single-segment identifier of a
   query, which is why the flag has a two-word name that hardly collides with

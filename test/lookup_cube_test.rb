@@ -296,6 +296,27 @@ describe "LookupCube" do
       )
     end
 
+    it "adds the values of the operands of calculated members that add members" do
+      # Adding is not aggregating: an operand counts each time, and distinct counts are added.
+      with = "MEMBER [Time].[Q1 twice] AS '[Time].[1997].[Q1] + [Time].[1997].[Q1]' " \
+        "MEMBER [Time].[Q1 and Q2] AS '[Time].[1997].[Q1] + [Time].[1997].[Q2]'"
+      rows = "{[Time].[Q1 twice], [Time].[Q1 and Q2]}"
+      expected = values(<<~MDX)
+        WITH #{with}
+        SELECT {[Measures].[Unit Sales], [Measures].[Customer Count]} ON COLUMNS, #{rows} ON ROWS FROM [Sales]
+      MDX
+      actual = values(<<~MDX)
+        WITH #{with}
+          MEMBER [Measures].[Unit Sales Lookup] AS 'LookupCube("Sales", "[Measures].[Unit Sales]", SHARED_CONTEXT)'
+          MEMBER [Measures].[Customer Count Lookup] AS
+            'LookupCube("Sales", "[Measures].[Customer Count]", SHARED_CONTEXT)'
+        SELECT {[Measures].[Unit Sales Lookup], [Measures].[Customer Count Lookup]} ON COLUMNS,
+          #{rows} ON ROWS
+        FROM [Warehouse]
+      MDX
+      assert_equal expected, actual
+    end
+
     it "maps calculated members that return a member" do
       assert_lookup_equals_warehouse(
         'LookupCube("Warehouse", "[Measures].[Warehouse Sales]", SHARED_CONTEXT)',
