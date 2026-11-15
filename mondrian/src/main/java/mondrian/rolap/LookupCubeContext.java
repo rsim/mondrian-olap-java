@@ -1008,6 +1008,16 @@ class LookupCubeContext {
             super(nullMember, calc, null, tupleList);
         }
 
+        /**
+         * The target evaluator has no slicer, so a placeholder is calculated
+         * like an aggregated member. The NON EMPTY crossjoin optimizer then
+         * keeps it in the context instead of replacing it with the All
+         * member.
+         */
+        public boolean isCalculated() {
+            return true;
+        }
+
         public boolean equals(Object o) {
             return o == this;
         }

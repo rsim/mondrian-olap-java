@@ -227,7 +227,10 @@ expression, given as a string, in another cube of the schema and returns
     `RolapCubeHierarchy#lookupCubeMember`, with no SQL; otherwise by unique
     name;
   - compound slicer placeholders (`RolapResult.CompoundSlicerRolapMember`):
-    re-created in the target cube over the mapped tuples. They are set last
+    re-created in the target cube over the mapped tuples. The target
+    placeholders are calculated members, because the target evaluator has no
+    slicer, so the NON EMPTY crossjoin optimizer keeps them in the context
+    instead of replacing them with All members. They are set last
     and not on hierarchies that a mapped calculated member sets, because the
     compound slicer has the lowest solve order;
   - calculated members that aggregate members or sets: `Aggregate(<set>)`
