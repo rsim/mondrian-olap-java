@@ -266,6 +266,7 @@ public class FastBatchingCellReader implements CellReader {
                     // index is informed that this header is there,
                     // so a LoadBatchCommand might still return
                     // it on the next iteration.
+                    // PATCH: Remove the header from the index of its star.
                     removeHeader(header);
                     ++failureCount;
                     continue;
@@ -523,6 +524,7 @@ public class FastBatchingCellReader implements CellReader {
         }
         body = cacheMgr.compositeCache.get(header);
         if (body == null) {
+            // PATCH: Remove the header from the index of its star.
             removeHeader(header);
             return null;
         }
