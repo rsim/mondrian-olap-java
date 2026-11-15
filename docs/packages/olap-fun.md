@@ -240,7 +240,9 @@ expression, given as a string, in another cube of the schema and returns
     count a repeated operand once and would not add distinct counts.
 
   Any other calculated member on a mapped hierarchy fails the query, also a
-  calculated member inside the set of an aggregated member.
+  calculated member inside the set of an aggregated member. An aggregated
+  member is mapped to its distinct target tuples, so a tuple that its set
+  repeats counts once, unlike in the source cube.
 - **`SHARED_CONTEXT` is a reserved word**, like the flags of `Descendants`.
   Reserved words apply to every unbracketed single-segment identifier of a
   query, which is why the flag has a two-word name that hardly collides with
