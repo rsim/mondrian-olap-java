@@ -383,6 +383,8 @@ public class Query extends QueryPart {
    * modified the query's expression tree in any way.
    */
   public void resolve() {
+    // PATCH: Formulas or axes may have changed, so LookupCube calls are looked up again.
+    usesLookupCube = null;
     // Before commencing validation, create all calculated members
     // and calculated sets
     createFormulaElements();

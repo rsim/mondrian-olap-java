@@ -315,6 +315,21 @@ describe "LookupCube" do
     end
   end
 
+  describe "native evaluation" do
+    it "is off for a query that gets a LookupCube formula after it was executed" do
+      connection = @olap.raw_mondrian_connection
+      query = connection.parseQuery("SELECT {[Measures].[Unit Sales]} ON COLUMNS FROM [Sales]")
+      connection.execute(query)
+      assert_equal false, query.usesLookupCube
+      query.addFormula(
+        Java::MondrianOlap::Id.new(Java::MondrianOlap::Util.parseIdentifier("[Measures].[Lookup]")),
+        connection.parseExpression('LookupCube("Warehouse", "[Measures].[Warehouse Sales]")'),
+        [].to_java(Java::MondrianOlap::MemberProperty)
+      )
+      assert_equal true, query.usesLookupCube
+    end
+  end
+
   describe "cell batching" do
     it "loads the cells of the other cube in batches, not one per row" do
       flush_cube_cache("Warehouse")
