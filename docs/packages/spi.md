@@ -132,6 +132,23 @@ factory methods for script-based `DynamicSchemaProcessor`,
 `DataSourceResolver`, and `DataSourceChangeListener`, but only the formatter
 and UDF variants are reachable from schema XML.
 
+Cell formatters are also reachable from MDX queries through the
+`CELL_FORMATTER` and `CELL_FORMATTER_SCRIPT` calculated member properties
+(`RolapHierarchy.RolapCalculatedMeasure#setProperty`), so the fork lets a
+deployment restrict them. `FormatterFactory#createCellFormatter` checks two
+properties before any class is loaded or any script is compiled, for both
+schema and query formatters:
+
+- `mondrian.olap.cellFormatter.allowedClasses` is a comma-separated list of
+  allowed class names, where an entry ending with `*` matches by prefix
+  (for example, `rubyobj.Mondrian.OLAP.Schema.CellFormatter.*` for the gem's
+  Ruby formatters). Empty (the default) allows any class.
+- `mondrian.olap.cellFormatter.scriptEnabled` set to `false` rejects cell
+  formatter scripts. Defaults to `true`.
+
+Member and property formatters can only be declared in the schema and are
+not restricted.
+
 ## Non-dialect contents of `mondrian.spi.impl`
 
 `CatalogLocatorImpl`, `IdentityCatalogLocator`, `ServletContextCatalogLocator`
