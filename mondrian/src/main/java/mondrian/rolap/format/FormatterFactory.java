@@ -204,6 +204,12 @@ public class FormatterFactory {
     {
         final Class<?> clazz = Class.forName(
             className, false, FormatterFactory.class.getClassLoader());
+        // Class#asSubclass would throw a ClassCastException that names only
+        // the loaded class, so name the expected interface too.
+        if (!formatterInterface.isAssignableFrom(clazz)) {
+            throw new ClassCastException(
+                clazz + " does not implement " + formatterInterface);
+        }
         final Constructor<? extends T> constructor =
             clazz.asSubclass(formatterInterface).getConstructor();
         return constructor.newInstance();

@@ -60,6 +60,7 @@ Does not affect any other built-in MDX functions.
         <Type>String</Type>
         <Default></Default>
     </PropertyDefinition>
+    <!-- PATCH: Add properties to restrict cell formatter classes and scripts -->
     <PropertyDefinition>
         <Name>CellFormatterAllowedClasses</Name>
         <Path>mondrian.olap.cellFormatter.allowedClasses</Path>

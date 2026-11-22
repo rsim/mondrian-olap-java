@@ -129,8 +129,9 @@ describe "Cell formatter restrictions" do
     it "rejects a class that does not implement the cell formatter interface" do
       properties.CellFormatterAllowedClasses.set("")
       error = assert_raises(Mondrian::OLAP::Error) { execute_with_formatter_class("java.lang.Object") }
-      # The ClassCastException from Class#asSubclass is the root cause.
-      assert_equal "class java.lang.Object", error.root_cause_message
+      # The ClassCastException from FormatterFactory is the root cause.
+      assert_equal "class java.lang.Object does not implement interface mondrian.spi.CellFormatter",
+        error.root_cause_message
     end
   end
 
