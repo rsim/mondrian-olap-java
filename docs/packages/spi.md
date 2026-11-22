@@ -151,7 +151,8 @@ schema and query formatters:
 
 Set both properties at startup. Schema formatters are checked when the schema
 loads, so a schema already in `RolapSchemaPool` keeps its formatters until it
-is flushed, while query formatters are checked on every query.
+is flushed, while query formatters are checked whenever a query is parsed
+(an olap4j `PreparedOlapStatement` keeps the formatters it was prepared with).
 
 Member and property formatters can only be declared in the schema and are
 not restricted. For all three formatter kinds, `FormatterFactory` loads a
