@@ -149,6 +149,10 @@ schema and query formatters:
 - `mondrian.olap.cellFormatter.scriptEnabled` set to `false` rejects cell
   formatter scripts. Defaults to `true`.
 
+Set both properties at startup. Schema formatters are checked when the schema
+loads, so a schema already in `RolapSchemaPool` keeps its formatters until it
+is flushed, while query formatters are checked on every query.
+
 Member and property formatters can only be declared in the schema and are
 not restricted. For all three formatter kinds, `FormatterFactory` loads a
 formatter class without initializing it and checks that it implements the

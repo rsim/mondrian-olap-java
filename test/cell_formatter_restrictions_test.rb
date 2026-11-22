@@ -6,7 +6,9 @@ require_relative "test_helper"
 # calculated member properties in MDX queries. The mondrian.olap.cellFormatter.allowedClasses
 # and mondrian.olap.cellFormatter.scriptEnabled properties restrict which formatters may be used.
 describe "Cell formatter restrictions" do
-  RUBY_FORMATTER_CLASS = "rubyobj.Mondrian.OLAP.Schema.CellFormatter.Integer20DigitsUdf"
+  def ruby_formatter_class
+    "rubyobj.Mondrian.OLAP.Schema.CellFormatter.Integer20DigitsUdf"
+  end
 
   def properties
     Java::MondrianOlap::MondrianProperties.instance
@@ -61,17 +63,17 @@ describe "Cell formatter restrictions" do
   describe "allowed classes" do
     it "allows any class when the property is empty" do
       properties.CellFormatterAllowedClasses.set("")
-      assert_equal ["%020d" % 123], execute_with_formatter_class(RUBY_FORMATTER_CLASS).formatted_values
+      assert_equal ["%020d" % 123], execute_with_formatter_class(ruby_formatter_class).formatted_values
     end
 
     it "allows a class listed by its exact name" do
-      properties.CellFormatterAllowedClasses.set("com.example.OtherFormatter, #{RUBY_FORMATTER_CLASS}")
-      assert_equal ["%020d" % 123], execute_with_formatter_class(RUBY_FORMATTER_CLASS).formatted_values
+      properties.CellFormatterAllowedClasses.set("com.example.OtherFormatter, #{ruby_formatter_class}")
+      assert_equal ["%020d" % 123], execute_with_formatter_class(ruby_formatter_class).formatted_values
     end
 
     it "allows a class matching a prefix entry" do
       properties.CellFormatterAllowedClasses.set("rubyobj.Mondrian.OLAP.Schema.CellFormatter.*")
-      assert_equal ["%020d" % 123], execute_with_formatter_class(RUBY_FORMATTER_CLASS).formatted_values
+      assert_equal ["%020d" % 123], execute_with_formatter_class(ruby_formatter_class).formatted_values
     end
 
     it "rejects a class that is not listed" do
@@ -82,8 +84,8 @@ describe "Cell formatter restrictions" do
     end
 
     it "matches class names exactly when the entry has no wildcard" do
-      properties.CellFormatterAllowedClasses.set(RUBY_FORMATTER_CLASS.sub(/Udf\z/, ""))
-      error = assert_raises(Mondrian::OLAP::Error) { execute_with_formatter_class(RUBY_FORMATTER_CLASS) }
+      properties.CellFormatterAllowedClasses.set(ruby_formatter_class.sub(/Udf\z/, ""))
+      error = assert_raises(Mondrian::OLAP::Error) { execute_with_formatter_class(ruby_formatter_class) }
       assert_match "is not allowed by the mondrian.olap.cellFormatter.allowedClasses property", error.root_cause_message
     end
 
@@ -151,7 +153,7 @@ describe "Cell formatter restrictions" do
 
     it "still allows formatter classes when scripts are disabled" do
       properties.CellFormatterScriptEnabled.set(false)
-      assert_equal ["%020d" % 123], execute_with_formatter_class(RUBY_FORMATTER_CLASS).formatted_values
+      assert_equal ["%020d" % 123], execute_with_formatter_class(ruby_formatter_class).formatted_values
     end
   end
 end

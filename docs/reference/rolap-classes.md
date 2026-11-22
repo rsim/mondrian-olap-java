@@ -905,7 +905,7 @@ thread-safety assertions accept any of the cache manager's actor *threads*
 
 | Type | One-liner |
 |---|---|
-| `FormatterFactory` | Single point for creating element formatters from schema declarations (class name or script): `#createCellFormatter`, `#createRolapMemberFormatter`, `#createPropertyFormatter`, with defaults when no custom formatter is declared. |
+| `FormatterFactory` | Single point for creating element formatters from schema declarations (class name or script): `#createCellFormatter`, `#createRolapMemberFormatter`, `#createPropertyFormatter`, with defaults when no custom formatter is declared. Cell formatters can also come from the `CELL_FORMATTER`/`CELL_FORMATTER_SCRIPT` properties of query calculated measures, so `#createCellFormatter` enforces the fork's `mondrian.olap.cellFormatter.allowedClasses`/`scriptEnabled` restrictions. |
 | `FormatterCreateContext` | Immutable parameter object (builder pattern) describing the formatter to create: element name, class/script from XML. |
 | `DefaultFormatter` | Default value formatter shared by member and property formatting: numbers rendered without a trailing `.0`. |
 | `DefaultRolapMemberFormatter` | Default `MemberFormatter` SPI implementation delegating to `DefaultFormatter`. |
