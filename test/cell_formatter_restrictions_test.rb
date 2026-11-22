@@ -145,6 +145,24 @@ describe "Cell formatter restrictions" do
         "because the mondrian.olap.cellFormatter.scriptEnabled property is false", error.root_cause_message
     end
 
+    it "rejects a schema measure formatter script when scripts are disabled" do
+      properties.CellFormatterScriptEnabled.set(false)
+      schema = define_schema do
+        cube "Sales" do
+          table "sales_fact_1997"
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum" do
+            cell_formatter do
+              script 'return "formatted";', language: "JavaScript"
+            end
+          end
+        end
+      end
+      error = assert_raises(Mondrian::OLAP::Error) do
+        Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema)).close
+      end
+      assert_match "Cell formatter script for member '[Measures].[Unit Sales]' is not allowed", error.root_cause_message
+    end
+
     it "allows a cell formatter script when scripts are enabled" do
       skip "JavaScript engine is not available" unless javascript_engine_available?
       properties.CellFormatterScriptEnabled.set(true)

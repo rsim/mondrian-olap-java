@@ -98,9 +98,10 @@ captions, and member property values. Declared here but constructed by
 supersedes the attribute), and for cell formatters also from the
 `CELL_FORMATTER`/`CELL_FORMATTER_SCRIPT` properties of calculated measures in
 MDX queries (restricted by the fork's `mondrian.olap.cellFormatter.*`
-properties, see [packages/spi.md](../packages/spi.md)). Each formatter is created once per schema element at
-load time — needs a public no-arg constructor — and is then invoked from
-evaluation threads, so keep implementations stateless.
+properties, see [packages/spi.md](../packages/spi.md)). Each formatter is
+created once per schema element at load time (or per calculated measure when
+a query is prepared) — needs a public no-arg constructor — and is then invoked
+from evaluation threads, so keep implementations stateless.
 
 **`ProfileHandler`** — receives the executed `Calc` plan text and `QueryTiming`
 after a query completes. Programmatic only: attach via

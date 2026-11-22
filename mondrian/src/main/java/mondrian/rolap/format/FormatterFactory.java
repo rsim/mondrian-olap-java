@@ -10,6 +10,7 @@
 package mondrian.rolap.format;
 
 import mondrian.olap.MondrianProperties;
+import mondrian.olap.Util;
 import mondrian.resource.MondrianResource;
 import mondrian.spi.CellFormatter;
 import mondrian.spi.MemberFormatter;
@@ -66,6 +67,8 @@ public class FormatterFactory {
         checkCellFormatterAllowed(context);
         try {
             if (context.getFormatterClassName() != null) {
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
                 return createFormatter(
                     context.getFormatterClassName(), CellFormatter.class);
             }
@@ -96,6 +99,8 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
                 return createFormatter(
                     context.getFormatterClassName(), MemberFormatter.class);
             }
@@ -127,6 +132,8 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
                 return createFormatter(
                     context.getFormatterClassName(), PropertyFormatter.class);
             }
@@ -173,7 +180,7 @@ public class FormatterFactory {
         String className,
         String allowedList)
     {
-        if (allowedList == null || allowedList.trim().isEmpty()) {
+        if (Util.isBlank(allowedList)) {
             return true;
         }
         for (String entry : allowedList.split(",")) {
