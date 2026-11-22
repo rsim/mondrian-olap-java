@@ -69,8 +69,12 @@ either in the CELL_FORMATTER property of a calculated member (which can be
 specified in an MDX query) or in a schema CellFormatter element or
 formatter attribute. An entry ending with <code>*</code> matches all class
 names that start with the preceding prefix, for example
-<code>rubyobj.Mondrian.OLAP.Schema.CellFormatter.*</code>. Names are matched
-case-sensitively. Whitespace around entries is trimmed.
+<code>rubyobj.*</code> for all Ruby formatters of the mondrian-olap gem.
+Shared Ruby formatters are named
+<code>rubyobj.Mondrian.OLAP.Schema.CellFormatter.&lt;Name&gt;Udf</code>, but
+other Ruby formatters get generated names such as
+<code>rubyobj.Class$0x1b2c3d4e</code>. Names are matched case-sensitively.
+Whitespace around entries is trimmed.
 
 The check is done before the class is loaded, so a class that is not
 allowed is never initialized or instantiated.

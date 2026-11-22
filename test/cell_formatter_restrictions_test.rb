@@ -102,6 +102,36 @@ describe "Cell formatter restrictions" do
       end
       assert_match "Formatter class 'java.lang.String' for member '[Measures].[Unit Sales]' is not allowed", error.root_cause_message
     end
+
+    it "allows a non-shared Ruby formatter matching the rubyobj prefix" do
+      properties.CellFormatterAllowedClasses.set("rubyobj.*")
+      schema = define_schema do
+        cube "Sales" do
+          table "sales_fact_1997"
+          measure "Unit Sales", column: "unit_sales", aggregator: "sum" do
+            cell_formatter do
+              ruby do |value|
+                "formatted"
+              end
+            end
+          end
+        end
+      end
+      olap = Mondrian::OLAP::Connection.create(CONNECTION_PARAMS.except(:catalog).merge(schema: schema))
+      begin
+        result = olap.execute("SELECT {[Measures].[Unit Sales]} ON COLUMNS FROM [Sales]")
+        assert_equal ["formatted"], result.formatted_values
+      ensure
+        olap.close
+      end
+    end
+
+    it "rejects a class that does not implement the cell formatter interface" do
+      properties.CellFormatterAllowedClasses.set("")
+      error = assert_raises(Mondrian::OLAP::Error) { execute_with_formatter_class("java.lang.Object") }
+      # The ClassCastException from Class#asSubclass is the root cause.
+      assert_equal "class java.lang.Object", error.root_cause_message
+    end
   end
 
   describe "scripts" do

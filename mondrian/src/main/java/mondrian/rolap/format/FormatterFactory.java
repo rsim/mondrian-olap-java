@@ -66,7 +66,8 @@ public class FormatterFactory {
         checkCellFormatterAllowed(context);
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                return createFormatter(
+                    context.getFormatterClassName(), CellFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.cellFormatter(
@@ -95,7 +96,8 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                return createFormatter(
+                    context.getFormatterClassName(), MemberFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.memberFormatter(
@@ -125,7 +127,8 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                return createFormatter(
+                    context.getFormatterClassName(), PropertyFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.propertyFormatter(
@@ -191,10 +194,18 @@ public class FormatterFactory {
         return false;
     }
 
-    private static <T> T createFormatter(String className) throws Exception {
-        @SuppressWarnings("unchecked")
-        Class<T> clazz = (Class<T>) Class.forName(className);
-        Constructor<T> constructor = clazz.getConstructor();
+    // PATCH: Load the class without initializing it and check that it
+    // implements the formatter interface before it is instantiated, so that
+    // a formatter class name (which can come from an MDX query) cannot run
+    // the static initializer or the constructor of an arbitrary class.
+    private static <T> T createFormatter(
+        String className,
+        Class<T> formatterInterface) throws Exception
+    {
+        final Class<?> clazz = Class.forName(
+            className, false, FormatterFactory.class.getClassLoader());
+        final Constructor<? extends T> constructor =
+            clazz.asSubclass(formatterInterface).getConstructor();
         return constructor.newInstance();
     }
 }

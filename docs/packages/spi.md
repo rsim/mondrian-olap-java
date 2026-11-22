@@ -141,13 +141,18 @@ schema and query formatters:
 
 - `mondrian.olap.cellFormatter.allowedClasses` is a comma-separated list of
   allowed class names, where an entry ending with `*` matches by prefix
-  (for example, `rubyobj.Mondrian.OLAP.Schema.CellFormatter.*` for the gem's
-  Ruby formatters). Empty (the default) allows any class.
+  (for example, `rubyobj.*` for the gem's Ruby formatters). Shared Ruby
+  formatters are named `rubyobj.Mondrian.OLAP.Schema.CellFormatter.<Name>Udf`,
+  but a non-shared `ruby do ... end` formatter is an anonymous class that
+  JRuby names like `rubyobj.Class$0x1b2c3d4e`. Empty (the default) allows any
+  class.
 - `mondrian.olap.cellFormatter.scriptEnabled` set to `false` rejects cell
   formatter scripts. Defaults to `true`.
 
 Member and property formatters can only be declared in the schema and are
-not restricted.
+not restricted. For all three formatter kinds, `FormatterFactory` loads a
+formatter class without initializing it and checks that it implements the
+formatter interface before it calls the constructor.
 
 ## Non-dialect contents of `mondrian.spi.impl`
 
