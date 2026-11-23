@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "fileutils"
+require "tmpdir"
 
 # Cell formatters can be specified with the CELL_FORMATTER and CELL_FORMATTER_SCRIPT
 # calculated member properties in MDX queries. The mondrian.olap.cellFormatter.allowedClasses
@@ -134,6 +136,91 @@ describe "Cell formatter restrictions" do
       # The ClassCastException from FormatterFactory is the root cause.
       assert_equal "class java.lang.Object does not implement interface mondrian.spi.CellFormatter",
         error.root_cause_message
+    end
+  end
+
+  # Fixture classes record their static initializer and constructor runs in System properties,
+  # so checking them does not initialize the class. Each fixture is requested by one test only,
+  # as a class stays initialized after its first use.
+  describe "class initialization" do
+    def fixture_package
+      "cellformattertest"
+    end
+
+    # Fixture class names, mapped to whether the class implements CellFormatter.
+    def fixtures
+      {"WrongTypeFixture" => false, "NotAllowedFormatterFixture" => true, "AllowedFormatterFixture" => true}
+    end
+
+    def fixture_source(class_name, implements_cell_formatter)
+      side_effect = ->(event) { %(System.setProperty("#{fixture_package}.#{class_name}.#{event}", "true");) }
+      <<~JAVA
+        package #{fixture_package};
+        public class #{class_name}#{" implements mondrian.spi.CellFormatter" if implements_cell_formatter} {
+          static { #{side_effect.call("initialized")} }
+          public #{class_name}() { #{side_effect.call("constructed")} }
+          #{'public String formatCell(Object value) { return "fixture"; }' if implements_cell_formatter}
+        }
+      JAVA
+    end
+
+    before(:all) do
+      @compiler = javax.tools.ToolProvider.getSystemJavaCompiler
+      if @compiler
+        @fixture_dir = Dir.mktmpdir
+        source_dir = File.join(@fixture_dir, fixture_package)
+        Dir.mkdir(source_dir)
+        source_files = fixtures.map do |class_name, implements_cell_formatter|
+          File.join(source_dir, "#{class_name}.java").tap do |path|
+            File.write(path, fixture_source(class_name, implements_cell_formatter))
+          end
+        end
+        mondrian_jar = Java::MondrianSpi::CellFormatter.java_class.to_java.getProtectionDomain.getCodeSource.getLocation.getPath
+        exit_code = @compiler.run(nil, nil, nil, ["-cp", mondrian_jar, "-d", @fixture_dir, *source_files].to_java(:string))
+        raise "Failed to compile cell formatter fixtures" unless exit_code == 0
+        $CLASSPATH << "#{@fixture_dir}/"
+      end
+    end
+
+    after(:all) do
+      FileUtils.rm_rf(@fixture_dir) if @fixture_dir
+    end
+
+    before do
+      skip "Java compiler is not available" unless @compiler
+    end
+
+    def fixture_class(class_name)
+      "#{fixture_package}.#{class_name}"
+    end
+
+    def fixture_event?(class_name, event)
+      java.lang.System.getProperty("#{fixture_package}.#{class_name}.#{event}") == "true"
+    end
+
+    it "initializes and constructs an allowed formatter class" do
+      properties.CellFormatterAllowedClasses.set(fixture_class("AllowedFormatterFixture"))
+      assert_equal ["fixture"], execute_with_formatter_class(fixture_class("AllowedFormatterFixture")).formatted_values
+      assert_equal true, fixture_event?("AllowedFormatterFixture", "initialized")
+      assert_equal true, fixture_event?("AllowedFormatterFixture", "constructed")
+    end
+
+    it "does not initialize or construct a class that does not implement the interface" do
+      properties.CellFormatterAllowedClasses.set("")
+      error = assert_raises(Mondrian::OLAP::Error) { execute_with_formatter_class(fixture_class("WrongTypeFixture")) }
+      assert_match "does not implement interface mondrian.spi.CellFormatter", error.root_cause_message
+      assert_equal false, fixture_event?("WrongTypeFixture", "initialized")
+      assert_equal false, fixture_event?("WrongTypeFixture", "constructed")
+    end
+
+    it "does not initialize or construct a formatter class that is not allowed" do
+      properties.CellFormatterAllowedClasses.set("rubyobj.*")
+      error = assert_raises(Mondrian::OLAP::Error) do
+        execute_with_formatter_class(fixture_class("NotAllowedFormatterFixture"))
+      end
+      assert_match "is not allowed by the mondrian.olap.cellFormatter.allowedClasses property", error.root_cause_message
+      assert_equal false, fixture_event?("NotAllowedFormatterFixture", "initialized")
+      assert_equal false, fixture_event?("NotAllowedFormatterFixture", "constructed")
     end
   end
 
