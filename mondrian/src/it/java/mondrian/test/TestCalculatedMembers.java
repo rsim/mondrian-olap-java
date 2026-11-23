@@ -991,9 +991,12 @@ public class TestCalculatedMembers extends BatchTestCase {
         assertQueryThrows(
             query,
             "Failed to load formatter class 'java.lang.String' for member '[Measures].[Foo]'.");
+        // PATCH: FormatterFactory checks the type before instantiating and
+        // throws its own ClassCastException.
         assertQueryThrows(
             query,
-              "class java.lang.String cannot be cast to class mondrian.spi.CellFormatter" );
+            "java.lang.ClassCastException: class java.lang.String does not "
+            + "implement interface mondrian.spi.CellFormatter");
     }
 
     public void testCalcMemberCustomFormatterInNonMeasureInQuery() {

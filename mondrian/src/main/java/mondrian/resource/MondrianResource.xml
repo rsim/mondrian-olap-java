@@ -388,6 +388,15 @@
     <text>Failed to load formatter class ''{0}'' for member ''{1}''.</text>
 </exception>
 
+<!-- PATCH: Errors for the cell formatter restriction properties -->
+<exception id="40166" name="CellFormatterClassNotAllowed">
+    <text>Formatter class ''{0}'' for member ''{1}'' is not allowed by the mondrian.olap.cellFormatter.allowedClasses property.</text>
+</exception>
+
+<exception id="40167" name="CellFormatterScriptDisabled">
+    <text>Cell formatter script for member ''{0}'' is not allowed because the mondrian.olap.cellFormatter.scriptEnabled property is false.</text>
+</exception>
+
 <exception id="40168" name="PropertyFormatterLoadFailed">
     <text>Failed to load formatter class ''{0}'' for property ''{1}''.</text>
 </exception>

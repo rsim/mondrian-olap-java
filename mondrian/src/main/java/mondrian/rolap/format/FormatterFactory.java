@@ -9,6 +9,8 @@
 */
 package mondrian.rolap.format;
 
+import mondrian.olap.MondrianProperties;
+import mondrian.olap.Util;
 import mondrian.resource.MondrianResource;
 import mondrian.spi.CellFormatter;
 import mondrian.spi.MemberFormatter;
@@ -59,9 +61,16 @@ public class FormatterFactory {
      * </p>
      */
     public CellFormatter createCellFormatter(FormatterCreateContext context) {
+        // PATCH: Cell formatters can be specified in MDX queries, so check
+        // them against the configured restrictions before any class is
+        // loaded or any script is compiled.
+        checkCellFormatterAllowed(context);
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
+                return createFormatter(
+                    context.getFormatterClassName(), CellFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.cellFormatter(
@@ -90,7 +99,10 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
+                return createFormatter(
+                    context.getFormatterClassName(), MemberFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.memberFormatter(
@@ -120,7 +132,10 @@ public class FormatterFactory {
     {
         try {
             if (context.getFormatterClassName() != null) {
-                return createFormatter(context.getFormatterClassName());
+                // PATCH: Pass the formatter interface to check the type
+                // before instantiating.
+                return createFormatter(
+                    context.getFormatterClassName(), PropertyFormatter.class);
             }
             if (context.getScriptText() != null) {
                 return Scripts.propertyFormatter(
@@ -136,10 +151,74 @@ public class FormatterFactory {
         return DEFAULT_PROPERTY_FORMATTER;
     }
 
-    private static <T> T createFormatter(String className) throws Exception {
-        @SuppressWarnings("unchecked")
-        Class<T> clazz = (Class<T>) Class.forName(className);
-        Constructor<T> constructor = clazz.getConstructor();
+    // PATCH: Mirrors the precedence of createCellFormatter, where the class
+    // name is used when present and the script is used otherwise.
+    private static void checkCellFormatterAllowed(
+        FormatterCreateContext context)
+    {
+        final MondrianProperties properties = MondrianProperties.instance();
+        final String className = context.getFormatterClassName();
+        if (className != null) {
+            if (!isClassNameAllowed(
+                    className, properties.CellFormatterAllowedClasses.get()))
+            {
+                throw MondrianResource.instance().CellFormatterClassNotAllowed
+                    .ex(className, context.getElementName());
+            }
+        } else if (context.getScriptText() != null
+            && !properties.CellFormatterScriptEnabled.get())
+        {
+            throw MondrianResource.instance().CellFormatterScriptDisabled
+                .ex(context.getElementName());
+        }
+    }
+
+    // PATCH: An empty list allows any class name. An entry ending with "*"
+    // matches by prefix, as dynamically generated classes (for example,
+    // JRuby formatters) share a package prefix but have varying names.
+    private static boolean isClassNameAllowed(
+        String className,
+        String allowedList)
+    {
+        if (Util.isBlank(allowedList)) {
+            return true;
+        }
+        for (String entry : allowedList.split(",")) {
+            final String allowed = entry.trim();
+            if (allowed.isEmpty()) {
+                continue;
+            }
+            if (allowed.endsWith("*")) {
+                final String prefix =
+                    allowed.substring(0, allowed.length() - 1);
+                if (className.startsWith(prefix)) {
+                    return true;
+                }
+            } else if (className.equals(allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // PATCH: Load the class without initializing it and check that it
+    // implements the formatter interface before it is instantiated, so that
+    // a formatter class name (which can come from an MDX query) cannot run
+    // the static initializer or the constructor of an arbitrary class.
+    private static <T> T createFormatter(
+        String className,
+        Class<T> formatterInterface) throws Exception
+    {
+        final Class<?> clazz = Class.forName(
+            className, false, FormatterFactory.class.getClassLoader());
+        // Class#asSubclass would throw a ClassCastException that names only
+        // the loaded class, so name the expected interface too.
+        if (!formatterInterface.isAssignableFrom(clazz)) {
+            throw new ClassCastException(
+                clazz + " does not implement " + formatterInterface);
+        }
+        final Constructor<? extends T> constructor =
+            clazz.asSubclass(formatterInterface).getConstructor();
         return constructor.newInstance();
     }
 }

@@ -365,6 +365,22 @@ The new classes are `LookupCubeFunDef`, `LookupCubeContext` and
   cube's star. It finds the star by the cube of the header's measure, because
   the stars of cubes with a filtered fact table share the fact table alias.
 
+### 1.11 Cell formatter restrictions
+
+Cell formatters can be specified in MDX queries with the `CELL_FORMATTER` and
+`CELL_FORMATTER_SCRIPT` calculated member properties (see
+[packages/spi.md](../packages/spi.md#formatter-spis-and-mondrianrolapformat)).
+The `// PATCH:` changes are in **`FormatterFactory`**:
+
+- `createCellFormatter` checks the `mondrian.olap.cellFormatter.allowedClasses`
+  (comma-separated class names, a trailing `*` matches by prefix) and
+  `mondrian.olap.cellFormatter.scriptEnabled` properties before any class is
+  loaded or any script is compiled. The new `MondrianResource` exceptions are
+  `CellFormatterClassNotAllowed` and `CellFormatterScriptDisabled`.
+- `createFormatter` loads a formatter class without initializing it and
+  checks that it implements the formatter interface before it calls the
+  constructor.
+
 ## 2. Concurrency hardening
 
 Changes that replace upstream's coarse synchronization so many connections /
