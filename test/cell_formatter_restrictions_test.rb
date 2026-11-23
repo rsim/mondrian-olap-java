@@ -175,7 +175,9 @@ describe "Cell formatter restrictions" do
             File.write(path, fixture_source(class_name, implements_cell_formatter))
           end
         end
-        mondrian_jar = Java::MondrianSpi::CellFormatter.java_class.to_java.getProtectionDomain.getCodeSource.getLocation.getPath
+        # URL#getPath would give "/D:/..." on Windows, which javac does not accept.
+        jar_url = Java::MondrianSpi::CellFormatter.java_class.to_java.getProtectionDomain.getCodeSource.getLocation
+        mondrian_jar = java.nio.file.Paths.get(jar_url.toURI).toString
         exit_code = @compiler.run(nil, nil, nil, ["-cp", mondrian_jar, "-d", @fixture_dir, *source_files].to_java(:string))
         raise "Failed to compile cell formatter fixtures" unless exit_code == 0
         $CLASSPATH << "#{@fixture_dir}/"
