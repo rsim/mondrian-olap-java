@@ -60,6 +60,9 @@ describe "Cell formatter restrictions" do
 
   def javascript_engine_available?
     !javax.script.ScriptEngineManager.new.getEngineByName("JavaScript").nil?
+  rescue NameError, Java::JavaLang::LinkageError
+    # The Java runtime may not include the java.scripting module.
+    false
   end
 
   describe "allowed classes" do
